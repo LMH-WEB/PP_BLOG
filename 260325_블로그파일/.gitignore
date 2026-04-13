@@ -1,0 +1,11 @@
+# API 키 보호 - 절대 GitHub에 올리면 안 됨
+.streamlit/secrets.toml
+settings.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+venv/
+.venv/
