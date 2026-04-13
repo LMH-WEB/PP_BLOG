@@ -911,6 +911,12 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# ── API 키 상태 표시 (항상 최상단) ────────────────────────────────────────────
+if api_key:
+    st.success(f"✅ API 키 로드됨: {api_key[:6]}...{api_key[-4:]}")
+else:
+    st.error("❌ API 키 없음 — Streamlit Cloud Secrets에 groq_api_key 를 설정해 주세요.")
+
 # ── 인기 검색어 조회 ───────────────────────────────────────────────────────────
 st.markdown("""
 <div class='toss-card' style='padding:20px 24px;'>
@@ -927,10 +933,13 @@ if "selected_keyword" not in st.session_state:
 trend_btn = st.button("📊 최근 1개월 TOP 30 조회", use_container_width=True)
 if trend_btn:
     if not api_key:
-        st.error("사이드바에서 Groq API 키를 먼저 입력해 주세요.")
+        st.error("❌ API 키가 없습니다. Streamlit Cloud Secrets를 확인해 주세요.")
     else:
-        with st.spinner("네이버·호갱노노·직방 데이터 분석 중..."):
-            st.session_state.trending_keywords = get_trending_keywords(api_key)
+        try:
+            with st.spinner("네이버·호갱노노·직방 데이터 분석 중..."):
+                st.session_state.trending_keywords = get_trending_keywords(api_key)
+        except Exception as e:
+            st.error(f"❌ 오류 발생: {e}")
 
 if st.session_state.trending_keywords:
     SOURCE_COLOR = {
