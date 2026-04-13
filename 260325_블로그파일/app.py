@@ -936,8 +936,12 @@ if trend_btn:
         st.error("❌ API 키가 없습니다. Streamlit Cloud Secrets를 확인해 주세요.")
     else:
         try:
-            with st.spinner("네이버·호갱노노·직방 데이터 분석 중..."):
+            with st.spinner("네이버·호갱노노·직방 데이터 분석 중... (30초~1분 소요)"):
                 st.session_state.trending_keywords = get_trending_keywords(api_key)
+            if st.session_state.trending_keywords:
+                st.success(f"✅ 키워드 {len(st.session_state.trending_keywords)}개 로드 완료!")
+            else:
+                st.warning("⚠️ 검색 데이터를 가져오지 못했습니다. 네트워크 문제일 수 있어요. 아래 키워드 입력창에 직접 입력해 주세요.")
         except Exception as e:
             st.error(f"❌ 오류 발생: {e}")
 
