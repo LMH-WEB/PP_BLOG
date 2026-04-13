@@ -996,7 +996,7 @@ keyword = st.text_input(
     placeholder="예: 강남 아파트,  전세사기,  재건축,  부동산 규제 ...",
     label_visibility="collapsed",
 )
-run_btn = st.button("🚀  블로그 생성 시작", type="primary", use_container_width=True)
+run_btn = st.button("🚀 블로그 생성 시작", use_container_width=True)
 
 
 # ── 실행 ──────────────────────────────────────────────────────────────────────
@@ -1065,9 +1065,11 @@ if run_btn:
     """, unsafe_allow_html=True)
 
     try:
-        research_text = st.write_stream(
-            run_search_team(kw, api_key, rss_data, news_data, web_data, price_data, info_data, kw_type)
-        )
+        _research_box = st.empty()
+        research_text = ""
+        for _chunk in run_search_team(kw, api_key, rss_data, news_data, web_data, price_data, info_data, kw_type):
+            research_text += _chunk
+            _research_box.markdown(research_text)
     except Exception as e:
         err = str(e)
         if "auth" in err.lower() or "invalid" in err.lower():
@@ -1093,7 +1095,11 @@ if run_btn:
     """, unsafe_allow_html=True)
 
     try:
-        blog_text = st.write_stream(run_blog_team(kw, research_text, api_key, kw_type))
+        _blog_box = st.empty()
+        blog_text = ""
+        for _chunk in run_blog_team(kw, research_text, api_key, kw_type):
+            blog_text += _chunk
+            _blog_box.markdown(blog_text)
     except Exception as e:
         err = str(e)
         if "auth" in err.lower() or "invalid" in err.lower():
