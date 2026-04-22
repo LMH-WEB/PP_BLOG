@@ -35,6 +35,13 @@ def get_trending_keywords(api_key: str) -> list:
         # 실수요자 관심 키워드
         "아파트 매매 전세 실수요 관심 키워드 2025",
         "청약 분양 인기 이슈 2025",
+        # 국가철도망·광역교통 이슈
+        "국가철도망 구축계획 부동산 호재 노선 2025",
+        "위례과천선 GTX 신설 노선 개통 수혜 아파트 2025",
+        "광역급행철도 신안산선 개통 부동산 영향 2025",
+        "수도권 철도 연장 역세권 아파트 관심 2025",
+        "국토교통부 철도 노선 확정 부동산 투자 2025",
+        "지하철 연장 개통 예정 수혜 지역 아파트 2025",
     ]
     raw_texts = []
     try:
@@ -43,7 +50,14 @@ def get_trending_keywords(api_key: str) -> list:
                 for item in ddgs.news(q, max_results=5, timelimit="m"):
                     t = item.get("title", "") + " " + item.get("body", "")[:300]
                     raw_texts.append(clean_text(t))
-            for q in ["부동산 네이버 블로그 인기 검색어", "호갱노노 직방 이슈 키워드", "부동산 카페 인기글 주제"]:
+            for q in [
+                "부동산 네이버 블로그 인기 검색어",
+                "호갱노노 직방 이슈 키워드",
+                "부동산 카페 인기글 주제",
+                "국가철도망 노선 역세권 부동산 블로그 키워드",
+                "위례과천선 신설 철도 역세권 수혜 아파트",
+                "수도권 지하철 연장 개통 부동산 블로그 인기",
+            ]:
                 for item in ddgs.text(q, max_results=5, timelimit="m"):
                     raw_texts.append(clean_text(item.get("title", "") + " " + item.get("body", "")[:300]))
     except Exception:
@@ -59,59 +73,73 @@ def get_trending_keywords(api_key: str) -> list:
         messages=[
             {"role": "system", "content": (
                 "당신은 네이버 블로그 SEO 전문가이자 부동산 콘텐츠 마케터입니다.\n\n"
-                "아래 수집 데이터(호갱노노·직방·네이버 부동산 이슈)를 분석하여,\n"
-                "지금 네이버에서 사람들이 가장 많이 검색하는 부동산 블로그 키워드 Top 30을 추천하세요.\n\n"
-                "핵심 기준:\n"
-                "1. 단순 지역명 금지 — 반드시 검색 의도가 담긴 키워드 (예: '강남' X → '강남 아파트 매수 타이밍' O)\n"
+                "아래 수집 데이터를 분석하여 키워드를 두 그룹으로 나누어 각각 정확히 15개씩 추천하세요.\n\n"
+                "=== 그룹 A: 지하철·국가철도망 호재 키워드 15개 ===\n"
+                "- 신설 노선·연장 개통·역세권 수혜와 직접 연결된 키워드\n"
+                "- 예시: 'GTX-A 수혜 아파트 매수 타이밍', '위례과천선 역세권 투자 전략',\n"
+                "  '신분당선 연장 부동산 호재', '국가철도망 개통 전 역세권 아파트',\n"
+                "  '수도권 전철 연장 수혜 지역'\n\n"
+                "=== 그룹 B: 사람들이 진짜 궁금해하는 부동산 키워드 15개 ===\n"
+                "- 실수요자·투자자가 네이버에서 실제로 검색하는 생생한 키워드\n"
+                "- 예시: '전세사기 안 당하는 법', '아파트 청약 가점 계산법',\n"
+                "  '2025 부동산 하반기 전망', '재건축 투자 지금 해도 될까',\n"
+                "  '갭투자 지금 괜찮을까', '취득세 계산하는 법'\n\n"
+                "공통 기준:\n"
+                "1. 단순 지역명 금지 — 검색 의도가 담긴 키워드만 (예: '강남' X → '강남 아파트 매수 타이밍' O)\n"
                 "2. 네이버에서 블로그 글로 검색할 법한 실제 검색어 형태\n"
-                "3. 지금 뜨는 이슈와 연결된 키워드 우선 (교통 호재, 정책, 실거래 급등 등)\n"
-                "4. 실수요자/투자자가 지금 당장 검색할 키워드\n\n"
-                "키워드 유형 (골고루 30개):\n"
-                "- 이슈형: 'GTX-A 개통 수혜 아파트', '신분당선 연장 부동산 호재'\n"
-                "- 비교형: '강남 vs 마포 아파트 투자', '전세 vs 매매 지금 유리한 것'\n"
-                "- 정보형: '아파트 실거래가 확인하는 법', '청약 당첨 확률 높이는 법'\n"
-                "- 전망형: '2025 부동산 하반기 전망', '재건축 투자 지금 해도 될까'\n"
-                "- 지역+이슈형: '판교 아파트 왜 오르나', '마포 래미안 실거래가 추이'\n\n"
-                "출력 형식 (반드시 준수):\n"
-                "키워드|네이버 예상검색량(상/중/하)|유형\n"
-                "예시:\n"
-                "GTX-A 개통 수혜 아파트|상|이슈형\n"
-                "2025 부동산 하반기 전망|상|전망형\n"
-                "아파트 실거래가 확인하는 법|중|정보형\n"
+                "3. 키워드는 5~20글자 (자연스러운 검색어)\n\n"
+                "출력 형식 (반드시 이 형식 그대로):\n"
+                "[철도호재]\n"
+                "키워드|상/중/하|유형\n"
+                "...(15줄)\n"
+                "[부동산궁금]\n"
+                "키워드|상/중/하|유형\n"
+                "...(15줄)\n\n"
                 "규칙:\n"
+                "- [철도호재] 와 [부동산궁금] 헤더 반드시 출력\n"
+                "- 각 그룹 정확히 15줄\n"
                 "- 한국어만, 한자·일본어 절대 금지\n"
-                "- 키워드는 5~20글자 (자연스러운 검색어)\n"
-                "- 정확히 30줄 출력, 다른 설명 없이 키워드만"
+                "- 헤더와 키워드 외 다른 설명 일절 출력 금지"
             )},
             {"role": "user", "content": f"수집 데이터:\n{combined}"},
         ],
-        max_tokens=1000,
+        max_tokens=1200,
         temperature=0.3,
     )
     raw = resp.choices[0].message.content or ""
     results = []
+    current_category = "부동산궁금"
     for line in raw.strip().splitlines():
         line = clean_text(line.strip())
         if not line:
             continue
+        if line.startswith("[철도호재]"):
+            current_category = "철도호재"
+            continue
+        if line.startswith("[부동산궁금]"):
+            current_category = "부동산궁금"
+            continue
         parts = line.split("|")
         if len(parts) >= 3:
             results.append({
-                "keyword": parts[0].strip(),
-                "score": parts[1].strip(),
-                "source": parts[2].strip(),
+                "keyword":  parts[0].strip(),
+                "score":    parts[1].strip(),
+                "source":   parts[2].strip(),
+                "category": current_category,
             })
         elif len(parts) == 2:
             results.append({
-                "keyword": parts[0].strip(),
-                "score": parts[1].strip(),
-                "source": "추천",
+                "keyword":  parts[0].strip(),
+                "score":    parts[1].strip(),
+                "source":   "추천",
+                "category": current_category,
             })
         elif parts[0].strip():
             results.append({
-                "keyword": parts[0].strip(),
-                "score": "-",
-                "source": "추천",
+                "keyword":  parts[0].strip(),
+                "score":    "-",
+                "source":   "추천",
+                "category": current_category,
             })
     return results[:30]
 
@@ -396,16 +424,20 @@ def search_news(keyword: str) -> list:
         f"직방 {keyword}",
         f"호갱노노 {keyword}",
         f"{keyword} 아파트 시세",
+        f"{keyword} 매매 전세 동향 2025",
+        f"{keyword} 부동산 실거래 뉴스",
+        f"국토교통부 {keyword} 발표",
+        f"{keyword} 아파트 분양 청약 2025",
     ]
     try:
         with DDGS() as ddgs:
             for query in queries:
-                for item in ddgs.news(query, max_results=4, timelimit="m"):
+                for item in ddgs.news(query, max_results=5, timelimit="m"):
                     results.append({
                         "구분": "뉴스",
                         "출처": item.get("source", ""),
-                        "제목": item.get("title", ""),
-                        "내용": item.get("body", "")[:300],
+                        "제목": clean_text(item.get("title", "")),
+                        "내용": clean_text(item.get("body", ""))[:400],
                         "날짜": item.get("date", ""),
                         "링크": item.get("url", ""),
                     })
@@ -428,6 +460,64 @@ def detect_keyword_type(keyword: str) -> str:
         if t in kw_lower:
             return "info"
     return "price"
+
+
+def detect_railway_keyword(keyword: str) -> bool:
+    """키워드에 철도·노선 관련 단어 포함 여부 감지"""
+    railway_triggers = [
+        "선", "철도", "GTX", "지하철", "역세권", "노선", "개통", "연장",
+        "광역급행", "KTX", "SRT", "위례", "과천", "신분당", "신안산",
+        "국가철도", "역", "환승", "급행", "트램", "경전철",
+    ]
+    for t in railway_triggers:
+        if t in keyword:
+            return True
+    return False
+
+
+def search_railway_data(keyword: str) -> list:
+    """철도·노선 키워드 전용 고정밀 검색 — 노선 정보·개통일·역세권 수혜 아파트"""
+    results = []
+    queries = [
+        f"{keyword} 노선도 역 위치 개통 일정",
+        f"{keyword} 수혜 아파트 단지 역세권",
+        f"{keyword} 개통 부동산 영향 시세 변화",
+        f"국가철도망 {keyword} 확정 노선",
+        f"{keyword} 역 주변 아파트 시세 전망 2025",
+        f"국토교통부 {keyword} 철도 계획 발표",
+        f"site:blog.naver.com {keyword} 역세권 아파트 투자",
+        f"site:cafe.naver.com {keyword} 개통 부동산",
+        f"{keyword} 신설역 주변 매매 전세 동향 2025",
+    ]
+    news_queries = [
+        f"{keyword} 철도 개통 부동산 뉴스 2025",
+        f"국가철도망 {keyword} 최신 뉴스",
+        f"{keyword} 역세권 아파트 시세 상승",
+    ]
+    try:
+        with DDGS() as ddgs:
+            for query in queries:
+                for item in ddgs.text(query, max_results=5, timelimit="y"):
+                    results.append({
+                        "구분": "철도정보",
+                        "출처": item.get("href", "")[:80],
+                        "제목": clean_text(item.get("title", "")),
+                        "내용": clean_text(item.get("body", ""))[:600],
+                        "링크": item.get("href", ""),
+                    })
+            for query in news_queries:
+                for item in ddgs.news(query, max_results=5, timelimit="m"):
+                    results.append({
+                        "구분": "철도뉴스",
+                        "출처": item.get("source", ""),
+                        "제목": clean_text(item.get("title", "")),
+                        "내용": clean_text(item.get("body", ""))[:400],
+                        "날짜": item.get("date", ""),
+                        "링크": item.get("url", ""),
+                    })
+    except Exception:
+        pass
+    return results
 
 
 def search_info_data(keyword: str) -> list:
@@ -467,16 +557,21 @@ def search_web_docs(keyword: str) -> list:
         f"site:cafe.naver.com {keyword} 아파트 매매",
         f"{keyword} 부동산 전망 분석 2025",
         f"{keyword} 아파트 실거래가 동향",
+        f"site:blog.naver.com {keyword} 매매 전세 시세",
+        f"site:cafe.naver.com {keyword} 부동산 투자 분석",
+        f"{keyword} 아파트 호재 개발 계획 2025",
+        f"네이버 부동산 {keyword} 시세 조회",
+        f"{keyword} 부동산 실거래 신고 2025 최신",
     ]
     try:
         with DDGS() as ddgs:
             for query in queries:
-                for item in ddgs.text(query, max_results=3, timelimit="m"):
+                for item in ddgs.text(query, max_results=4, timelimit="m"):
                     results.append({
                         "구분": "웹문서",
-                        "출처": item.get("href", "")[:50],
-                        "제목": item.get("title", ""),
-                        "내용": item.get("body", "")[:400],
+                        "출처": item.get("href", "")[:80],
+                        "제목": clean_text(item.get("title", "")),
+                        "내용": clean_text(item.get("body", ""))[:500],
                         "링크": item.get("href", ""),
                     })
     except Exception:
@@ -520,11 +615,28 @@ def search_price_data(keyword: str) -> list:
         pass
     return results
 
-def format_research_data(rss_data, news_data, web_data=None, price_data=None, info_data=None) -> str:
+def format_research_data(rss_data, news_data, web_data=None, price_data=None, info_data=None, railway_data=None) -> str:
     lines = []
     web_data = web_data or []
     price_data = price_data or []
     info_data = info_data or []
+    railway_data = railway_data or []
+
+    if railway_data:
+        lines.append("=== 국가철도망·노선·역세권 데이터 ===")
+        seen = set()
+        count = 1
+        for item in railway_data:
+            if item["제목"] in seen:
+                continue
+            seen.add(item["제목"])
+            lines.append(f"[{count}] [{item['구분']}] {item['제목']}")
+            lines.append(f"    {item['내용']}")
+            lines.append(f"    URL: {item['링크']}")
+            lines.append("")
+            count += 1
+            if count > 15:
+                break
 
     if info_data:
         lines.append("=== 정보·가이드·규정 데이터 ===")
@@ -626,10 +738,12 @@ SEARCH_SYSTEM = """당신은 대한민국 최고의 부동산 시장 분석가�
 9. 투자자·실수요자가 지금 당장 주목해야 할 변수 Top 3
 
 ⚠️ 수치 정확성 규칙 (절대 위반 금지):
-- 수집된 데이터에 있는 수치만 사용. 데이터에 없는 가격·거래량·변동률을 절대 지어내지 마세요.
+- 수집된 데이터에 있는 수치만 사용. 데이터에 없는 가격·거래량·변동률·면적을 절대 지어내지 마세요.
 - 수치를 사용할 때는 반드시 출처 URL 또는 플랫폼명(호갱노노/네이버부동산/국토교통부 등)을 괄호 안에 표기.
 - 수집 데이터에 해당 수치가 없으면 숫자 대신 "데이터 미확인" 또는 "수집 데이터 부족"으로 표기.
 - 단지명·면적·금액 조합이 수집 데이터에 없으면 절대 임의로 작성하지 마세요.
+- 철도·노선 데이터가 있으면: 역명·구간·개통 예정일·수혜 아파트 단지를 반드시 분석에 포함하세요.
+- 수집 데이터에 없는 역명·노선 구간을 절대 임의로 작성하지 마세요.
 한국어로만 작성합니다.
 ⚠️ 한자(漢字), 일본어(히라가나·가타카나), 중국어 사용 절대 금지.
 모든 단어는 순수 한국어 또는 영문 알파벳만 사용하세요."""
@@ -741,9 +855,10 @@ BLOG_SYSTEM = """당신은 대한민국 최고의 부동산 전문 칼럼니스�
 
 
 # ── AI 팀 함수 ────────────────────────────────────────────────────────────────
-def run_search_team(keyword: str, api_key: str, rss_data, news_data, web_data=None, price_data=None, info_data=None, kw_type: str = "price"):
+def run_search_team(keyword: str, api_key: str, rss_data, news_data, web_data=None, price_data=None, info_data=None, kw_type: str = "price", railway_data=None):
     client = Groq(api_key=api_key)
-    raw = format_research_data(rss_data, news_data, web_data or [], price_data or [], info_data or [])
+    raw = format_research_data(rss_data, news_data, web_data or [], price_data or [], info_data or [], railway_data or [])
+    is_railway = detect_railway_keyword(keyword)
     if kw_type == "info":
         user_msg = (
             f"분석 키워드: {keyword}\n\n"
@@ -755,13 +870,28 @@ def run_search_team(keyword: str, api_key: str, rss_data, news_data, web_data=No
             "4. 2025년 최신 변경사항 (있으면)\n"
             "5. 독자가 바로 활용할 수 있는 핵심 팁 3가지"
         )
+    elif is_railway:
+        user_msg = (
+            f"분석 키워드: {keyword}\n\n"
+            f"--- 수집된 데이터 ---\n{raw}\n---\n\n"
+            "위 데이터를 바탕으로 아래 항목을 모두 작성해 주세요.\n\n"
+            "【철도·노선 전용 분석 항목】\n"
+            "1. 노선 개요 (구간·역 목록·총연장·개통 예정 시기)\n"
+            "2. 주요 역세권 아파트 단지명과 현재 시세 (수집 데이터 기준, 없으면 '데이터 미확인')\n"
+            "3. 개통 전·후 역세권 부동산 가격 변화 사례 (유사 노선 비교 포함)\n"
+            "4. 지금 주목할 역세권 Top 3와 투자 포인트\n"
+            "5. 향후 3~6개월 시장 시나리오 (낙관·중립·비관)\n"
+            "6. 전문가 가설 3가지 ('~한다면 ~할 것이다' 형식)\n\n"
+            "⚠️ 수집 데이터에 없는 역명·단지명·가격은 절대 지어내지 마세요. '데이터 미확인'으로 표기."
+        )
     else:
         user_msg = (
             f"분석 키워드: {keyword}\n\n"
             f"--- 수집된 데이터 ---\n{raw}\n---\n\n"
             "위 데이터를 바탕으로 현황 분석과 미래 예측·가설을 모두 작성해 주세요.\n"
             "특히 호갱노노·네이버 부동산 실거래가 데이터를 최우선으로 활용하고,\n"
-            "구체적인 단지명·면적·가격·거래 시점을 반드시 포함하세요."
+            "구체적인 단지명·면적·가격·거래 시점을 반드시 포함하세요.\n"
+            "⚠️ 수집 데이터에 없는 가격·거래량·단지명은 절대 작성하지 말고 '데이터 미확인'으로 표기하세요."
         )
     stream = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
@@ -779,7 +909,7 @@ def run_search_team(keyword: str, api_key: str, rss_data, news_data, web_data=No
             yield clean_text(text)
 
 
-def run_blog_team(keyword: str, research: str, api_key: str, kw_type: str = "price"):
+def run_blog_team(keyword: str, research: str, api_key: str, kw_type: str = "price", is_railway: bool = False):
     client = Groq(api_key=api_key)
     if kw_type == "info":
         user_msg = (
@@ -796,6 +926,27 @@ def run_blog_team(keyword: str, research: str, api_key: str, kw_type: str = "pri
             "- Q&A 형식 절대 사용 금지\n"
             "- 각 섹션 절대 생략 금지\n"
             "- 10년 경력 부동산 전문가 설명 문체"
+        )
+    elif is_railway:
+        user_msg = (
+            f"블로그 주제 키워드: {keyword}\n\n"
+            f"--- 서치팀 분석 결과 ---\n{research}\n---\n\n"
+            "위 자료를 바탕으로 블로그 글을 작성하세요.\n\n"
+            "【철도·노선 전용 필수 조건 — 반드시 준수】\n"
+            "- 총 글자 수 2600자 이상 (공백 제외)\n"
+            "- 들어가며 280자 이상\n"
+            "- 핵심 1·2·3 각각 420자 이상\n"
+            "- 마무리 220자 이상\n"
+            "- 핵심 1: 반드시 노선 구간·역 목록·개통 시기를 구체적으로 서술\n"
+            "- 핵심 2: 반드시 역세권별 수혜 아파트와 시세 동향을 중심으로 서술\n"
+            "- 핵심 3: 반드시 '개통 전 지금이 매수 적기'라는 논거와 구체적 투자 전략 3가지 제시\n"
+            "- 서치팀 자료에 있는 역명·단지명·가격만 인용, 없으면 '수집 데이터 미확인'으로 표기\n"
+            "- 수치 뒤에 반드시 출처 표기 예: (국토교통부), (네이버 부동산), (호갱노노)\n"
+            "- 수집 데이터에 없는 역명·가격·면적을 절대 임의로 작성하지 말 것\n"
+            "- Q: / Q. 형식 절대 사용 금지\n"
+            "- Q&A 형식 절대 사용 금지\n"
+            "- 각 섹션 절대 생략 금지\n"
+            "- 10년 경력 부동산 칼럼니스트 분석 문체"
         )
     else:
         user_msg = (
@@ -921,7 +1072,7 @@ else:
 st.markdown("""
 <div class='toss-card' style='padding:20px 24px;'>
     <div style='font-size:16px; font-weight:800; color:#191F28; margin-bottom:4px;'>🔥 부동산 관심 키워드 TOP 30</div>
-    <div style='font-size:12px; color:#8B95A1;'>네이버 부동산 · 호갱노노 · 직방 · 교통호재·개발이슈 기반 최근 1개월 관심 급등 키워드</div>
+    <div style='font-size:12px; color:#8B95A1;'>🚆 지하철·국가철도망 호재 15개 &nbsp;+&nbsp; 🔍 사람들이 진짜 궁금한 부동산 키워드 15개</div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -946,49 +1097,62 @@ if trend_btn:
             st.error(f"❌ 오류 발생: {e}")
 
 if st.session_state.trending_keywords:
-    SOURCE_COLOR = {
-        "네이버 부동산": "#03C75A",
-        "호갱노노":      "#FF6B35",
-        "직방":          "#7C5CFC",
-        "공통":          "#3182F6",
-    }
     st.markdown("<div style='font-size:12px; color:#8B95A1; margin:10px 0 6px 0;'>클릭하면 키워드 입력창에 자동 입력됩니다</div>", unsafe_allow_html=True)
 
-    for i, item in enumerate(st.session_state.trending_keywords):
-        kw     = item["keyword"]
-        score  = item["score"]
-        source = item["source"]
-        color  = SOURCE_COLOR.get(source, "#8B95A1")
+    railway_kws  = [x for x in st.session_state.trending_keywords if x.get("category") == "철도호재"]
+    general_kws  = [x for x in st.session_state.trending_keywords if x.get("category") != "철도호재"]
 
-        # 관심도 바 (score가 숫자일 때)
-        try:
-            pct = max(10, min(100, int(score)))
-        except Exception:
-            pct = 50
-
-        rank_color = "#F5A623" if i < 3 else "#8B95A1"
-        rank_label = ["🥇", "🥈", "🥉"][i] if i < 3 else f"{i+1}위"
-
-        col_rank, col_info, col_btn = st.columns([1, 7, 2])
-        with col_rank:
-            st.markdown(f"<div style='font-size:18px; font-weight:900; color:{rank_color}; padding-top:8px; text-align:center;'>{rank_label}</div>", unsafe_allow_html=True)
-        with col_info:
-            st.markdown(f"""
-            <div style='padding:4px 0;'>
-                <div style='display:flex; align-items:center; gap:8px;'>
-                    <span style='font-size:15px; font-weight:700; color:#191F28;'>{kw}</span>
-                    <span style='font-size:11px; font-weight:700; color:{color}; background:{color}18; padding:2px 8px; border-radius:20px;'>{source}</span>
-                    <span style='font-size:12px; color:#8B95A1; margin-left:auto;'>관심도 {score}점</span>
+    def render_keyword_list(items, base_idx, bar_color):
+        for j, item in enumerate(items):
+            kw     = item["keyword"]
+            score  = item["score"]
+            source = item["source"]
+            try:
+                pct = max(10, min(100, int(score)))
+            except Exception:
+                pct = 50 if score == "상" else (35 if score == "중" else 20)
+            rank_color = "#F5A623" if j < 3 else "#8B95A1"
+            rank_label = ["🥇", "🥈", "🥉"][j] if j < 3 else f"{j+1}위"
+            col_rank, col_info, col_btn = st.columns([1, 7, 2])
+            with col_rank:
+                st.markdown(f"<div style='font-size:18px; font-weight:900; color:{rank_color}; padding-top:8px; text-align:center;'>{rank_label}</div>", unsafe_allow_html=True)
+            with col_info:
+                st.markdown(f"""
+                <div style='padding:4px 0;'>
+                    <div style='display:flex; align-items:center; gap:8px;'>
+                        <span style='font-size:15px; font-weight:700; color:#191F28;'>{kw}</span>
+                        <span style='font-size:11px; font-weight:700; color:{bar_color}; background:{bar_color}18; padding:2px 8px; border-radius:20px;'>{source}</span>
+                        <span style='font-size:12px; color:#8B95A1; margin-left:auto;'>검색량 {score}</span>
+                    </div>
+                    <div style='margin-top:5px; height:5px; background:#F2F4F6; border-radius:10px; overflow:hidden;'>
+                        <div style='width:{pct}%; height:100%; background:{bar_color}; border-radius:10px;'></div>
+                    </div>
                 </div>
-                <div style='margin-top:5px; height:5px; background:#F2F4F6; border-radius:10px; overflow:hidden;'>
-                    <div style='width:{pct}%; height:100%; background:{color}; border-radius:10px;'></div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-        with col_btn:
-            if st.button("선택", key=f"kw_{i}", use_container_width=True):
-                st.session_state.selected_keyword = kw
-                st.rerun()
+                """, unsafe_allow_html=True)
+            with col_btn:
+                if st.button("선택", key=f"kw_{base_idx}_{j}", use_container_width=True):
+                    st.session_state.selected_keyword = kw
+                    st.rerun()
+
+    col_a, col_b = st.columns(2)
+
+    with col_a:
+        st.markdown("""
+        <div style='background:#EBF3FE; border-radius:12px; padding:12px 16px; margin-bottom:12px;'>
+            <div style='font-size:14px; font-weight:900; color:#1B6EE0;'>🚆 지하철·국가철도망 호재</div>
+            <div style='font-size:11px; color:#3182F6; margin-top:2px;'>신설 노선·역세권 수혜 키워드 TOP 15</div>
+        </div>
+        """, unsafe_allow_html=True)
+        render_keyword_list(railway_kws[:15], base_idx=0, bar_color="#3182F6")
+
+    with col_b:
+        st.markdown("""
+        <div style='background:#FFF4E8; border-radius:12px; padding:12px 16px; margin-bottom:12px;'>
+            <div style='font-size:14px; font-weight:900; color:#D4651A;'>🔍 지금 사람들이 궁금한 부동산</div>
+            <div style='font-size:11px; color:#F5A623; margin-top:2px;'>실수요자·투자자 관심 키워드 TOP 15</div>
+        </div>
+        """, unsafe_allow_html=True)
+        render_keyword_list(general_kws[:15], base_idx=1, bar_color="#F5A623")
 
 st.markdown("<hr style='border:none; border-top:1px solid #F2F4F6; margin:16px 0;'>", unsafe_allow_html=True)
 
@@ -1024,9 +1188,11 @@ if run_btn:
     </div>
     """, unsafe_allow_html=True)
 
-    kw_type = detect_keyword_type(kw)
-    info_data  = []
-    price_data = []
+    kw_type   = detect_keyword_type(kw)
+    is_railway = detect_railway_keyword(kw)
+    info_data    = []
+    price_data   = []
+    railway_data = []
 
     with st.spinner("수집 중..."):
         rss_data  = fetch_rss(kw)
@@ -1036,14 +1202,21 @@ if run_btn:
             info_data = search_info_data(kw)
         else:
             price_data = search_price_data(kw)
+        if is_railway:
+            railway_data = search_railway_data(kw)
 
-    type_label = "📋 정보·가이드형" if kw_type == "info" else "💰 가격·시세형"
+    if is_railway:
+        type_label = "🚆 철도·노선형"
+    elif kw_type == "info":
+        type_label = "📋 정보·가이드형"
+    else:
+        type_label = "💰 가격·시세형"
     st.markdown(f"<div style='font-size:12px; color:#3182F6; font-weight:700; margin:8px 0;'>키워드 유형 감지: {type_label}</div>", unsafe_allow_html=True)
 
     extra_data = info_data if kw_type == "info" else price_data
     extra_label = "정보·가이드" if kw_type == "info" else "실거래가"
-    total = len(rss_data) + len(news_data) + len(web_data) + len(extra_data)
-    col1, col2, col3, col4 = st.columns(4)
+    total = len(rss_data) + len(news_data) + len(web_data) + len(extra_data) + len(railway_data)
+    col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         st.markdown(f"<div class='metric-card'><div class='metric-num'>{len(extra_data)}</div><div class='metric-label'>{extra_label}</div></div>", unsafe_allow_html=True)
     with col2:
@@ -1052,10 +1225,12 @@ if run_btn:
         st.markdown(f"<div class='metric-card'><div class='metric-num'>{len(web_data)}</div><div class='metric-label'>웹문서·블로그</div></div>", unsafe_allow_html=True)
     with col4:
         st.markdown(f"<div class='metric-card'><div class='metric-num'>{len(rss_data)}</div><div class='metric-label'>RSS 기사</div></div>", unsafe_allow_html=True)
+    with col5:
+        st.markdown(f"<div class='metric-card'><div class='metric-num'>{len(railway_data)}</div><div class='metric-label'>철도·노선</div></div>", unsafe_allow_html=True)
 
     if total > 0:
         with st.expander(f"📂 수집된 원본 데이터 보기 (총 {total}건)"):
-            st.text(format_research_data(rss_data, news_data, web_data, price_data, info_data)[:5000])
+            st.text(format_research_data(rss_data, news_data, web_data, price_data, info_data, railway_data)[:5000])
 
     st.markdown("<hr style='border:none; border-top:1px solid #E5E8EB; margin:20px 0;'>", unsafe_allow_html=True)
 
@@ -1071,7 +1246,7 @@ if run_btn:
     try:
         _research_box = st.empty()
         research_text = ""
-        for _chunk in run_search_team(kw, api_key, rss_data, news_data, web_data, price_data, info_data, kw_type):
+        for _chunk in run_search_team(kw, api_key, rss_data, news_data, web_data, price_data, info_data, kw_type, railway_data):
             research_text += _chunk
             _research_box.markdown(research_text)
     except Exception as e:
@@ -1101,7 +1276,7 @@ if run_btn:
     try:
         _blog_box = st.empty()
         blog_text = ""
-        for _chunk in run_blog_team(kw, research_text, api_key, kw_type):
+        for _chunk in run_blog_team(kw, research_text, api_key, kw_type, is_railway):
             blog_text += _chunk
             _blog_box.markdown(blog_text)
     except Exception as e:
