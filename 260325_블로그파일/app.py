@@ -3,6 +3,7 @@ from duckduckgo_search import DDGS
 import feedparser
 import streamlit as st
 import json, os, re
+from datetime import datetime
 
 def clean_text(text: str) -> str:
     """한자·일본어(히라가나·가타카나) 제거 후 반환"""
@@ -10,70 +11,57 @@ def clean_text(text: str) -> str:
     cleaned = re.sub(r' {2,}', ' ', cleaned)
     return cleaned
 
-def get_trending_keywords(api_key: str) -> list:
-    """네이버 블로그 유입용 부동산 SEO 키워드 Top 30
-    - 호갱노노·직방·네이버 부동산에서 지금 뜨는 이슈를 수집
-    - 그 이슈를 네이버에서 실제로 많이 검색하는 블로그 키워드로 변환 추천
-    """
+def get_trending_keywords(api_key: str, status_fn=None) -> list:
+    """네이버 블로그 유입용 부동산 SEO 키워드 Top 30"""
+    def _log(msg):
+        if status_fn:
+            status_fn(msg)
+
     queries = [
-        # 플랫폼 이슈 수집
-        "호갱노노 급등 이슈 관심 아파트 2025",
-        "직방 이달 인기 검색 이슈 2025",
-        "네이버 부동산 많이 본 이슈 키워드 2025",
-        # 네이버 검색 트렌드
-        "네이버 부동산 검색어 급상승 2025",
-        "부동산 네이버 블로그 인기 주제 2025",
-        "부동산 카테고리 네이버 검색량 급증 2025",
-        # 교통·개발 호재 이슈
-        "신분당선 GTX 개통 부동산 이슈 2025",
+        "GTX 개통 역세권 부동산 호재 2025",
         "재건축 재개발 이슈 지역 호재 2025",
-        "3기 신도시 분양 이슈 2025",
-        # 정책·금리 이슈
-        "부동산 대출 규제 완화 이슈 2025",
         "부동산 정책 핫이슈 매매 전세 2025",
-        "금리 인하 부동산 영향 2025",
-        # 실수요자 관심 키워드
-        "아파트 매매 전세 실수요 관심 키워드 2025",
-        "청약 분양 인기 이슈 2025",
-        # 국가철도망·광역교통 이슈
-        "국가철도망 구축계획 부동산 호재 노선 2025",
-        "위례과천선 GTX 신설 노선 개통 수혜 아파트 2025",
-        "광역급행철도 신안산선 개통 부동산 영향 2025",
-        "수도권 철도 연장 역세권 아파트 관심 2025",
-        "국토교통부 철도 노선 확정 부동산 투자 2025",
-        "지하철 연장 개통 예정 수혜 지역 아파트 2025",
+        "아파트 청약 분양 인기 이슈 2025",
+        "국가철도망 신설 노선 수혜 아파트 2025",
+    ]
+    text_queries = [
+        "부동산 네이버 블로그 인기 검색어 2025",
+        "수도권 지하철 연장 개통 부동산 블로그",
     ]
     raw_texts = []
+    _log("🌐 최신 이슈 수집 중...")
     try:
         with DDGS() as ddgs:
             for q in queries:
-                for item in ddgs.news(q, max_results=5, timelimit="m"):
-                    t = item.get("title", "") + " " + item.get("body", "")[:300]
-                    raw_texts.append(clean_text(t))
-            for q in [
-                "부동산 네이버 블로그 인기 검색어",
-                "호갱노노 직방 이슈 키워드",
-                "부동산 카페 인기글 주제",
-                "국가철도망 노선 역세권 부동산 블로그 키워드",
-                "위례과천선 신설 철도 역세권 수혜 아파트",
-                "수도권 지하철 연장 개통 부동산 블로그 인기",
-            ]:
-                for item in ddgs.text(q, max_results=5, timelimit="m"):
-                    raw_texts.append(clean_text(item.get("title", "") + " " + item.get("body", "")[:300]))
+                try:
+                    for item in ddgs.news(q, max_results=2, timelimit="m"):
+                        t = item.get("title", "") + " " + item.get("body", "")[:300]
+                        raw_texts.append(clean_text(t))
+                except Exception:
+                    continue
+            for q in text_queries:
+                try:
+                    for item in ddgs.text(q, max_results=2, timelimit="m"):
+                        raw_texts.append(clean_text(item.get("title", "") + " " + item.get("body", "")[:300]))
+                except Exception:
+                    continue
     except Exception:
         pass
 
-    if not raw_texts:
-        return []
+    if raw_texts:
+        combined = "수집된 최신 이슈 데이터:\n" + "\n".join(raw_texts[:40])
+    else:
+        combined = "※ 실시간 웹 데이터 수집 불가 — AI 자체 지식 기반으로 2025년 현재 네이버 부동산 트렌드를 분석하여 키워드를 추천하세요."
 
-    combined = "\n".join(raw_texts[:80])
+    _log("🤖 AI 키워드 분석 중...")
     client = Groq(api_key=api_key)
     resp = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[
             {"role": "system", "content": (
                 "당신은 네이버 블로그 SEO 전문가이자 부동산 콘텐츠 마케터입니다.\n\n"
-                "아래 수집 데이터를 분석하여 키워드를 두 그룹으로 나누어 각각 정확히 15개씩 추천하세요.\n\n"
+                "아래 데이터를 바탕으로 키워드를 두 그룹으로 나누어 각각 정확히 15개씩 추천하세요.\n"
+                "실시간 데이터가 없으면 2025년 현재 한국 부동산 시장 지식을 활용하세요.\n\n"
                 "=== 그룹 A: 지하철·국가철도망 호재 키워드 15개 ===\n"
                 "- 신설 노선·연장 개통·역세권 수혜와 직접 연결된 키워드\n"
                 "- 예시: 'GTX-A 수혜 아파트 매수 타이밍', '위례과천선 역세권 투자 전략',\n"
@@ -101,7 +89,7 @@ def get_trending_keywords(api_key: str) -> list:
                 "- 한국어만, 한자·일본어 절대 금지\n"
                 "- 헤더와 키워드 외 다른 설명 일절 출력 금지"
             )},
-            {"role": "user", "content": f"수집 데이터:\n{combined}"},
+            {"role": "user", "content": combined},
         ],
         max_tokens=1200,
         temperature=0.3,
@@ -146,16 +134,68 @@ def get_trending_keywords(api_key: str) -> list:
 
 def strip_markdown(text: str) -> str:
     """다운로드용 txt에서 마크다운 기호 제거"""
-    # --- 구분선 제거
     text = re.sub(r'^[-─━=]{2,}\s*$', '', text, flags=re.MULTILINE)
-    # ### ## # 헤더 기호 제거
     text = re.sub(r'^#{1,6}\s*', '', text, flags=re.MULTILINE)
-    # **굵게** 또는 *기울임* 제거
     text = re.sub(r'\*{1,3}(.+?)\*{1,3}', r'\1', text)
-    # ✅ 📊 같은 이모지는 유지, 단 앞뒤 ** 만 제거
-    # 연속 빈 줄 2개 이상 → 1개로
     text = re.sub(r'\n{3,}', '\n\n', text)
     return text.strip()
+
+
+# ── 블로그 저장소 ──────────────────────────────────────────────────────────────
+ARCHIVE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "블로그_저장소")
+os.makedirs(ARCHIVE_DIR, exist_ok=True)
+
+
+def auto_save_blog(keyword: str, research: str, blog: str) -> str:
+    """블로그 글을 저장소에 자동 저장, 저장된 파일명 반환"""
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_kw = re.sub(r'[\\/:*?"<>|]', '_', keyword)[:30]
+    fname = f"{ts}_{safe_kw}.txt"
+    fpath = os.path.join(ARCHIVE_DIR, fname)
+    char_count = len(blog.replace(" ", "").replace("\n", ""))
+    content = (
+        f"[키워드: {keyword}]\n"
+        f"[생성일시: {datetime.now().strftime('%Y-%m-%d %H:%M')}]\n"
+        f"[글자수: {char_count:,}자]\n"
+        f"{'='*60}\n\n"
+        f"=== 서치팀 분석 ===\n{strip_markdown(research)}\n\n"
+        f"{'='*60}\n\n"
+        f"=== 블로그 글 ===\n{blog}"
+    )
+    with open(fpath, "w", encoding="utf-8") as f:
+        f.write(content)
+    return fname
+
+
+def load_archive() -> list:
+    """저장소 파일 목록 반환 (최신순)"""
+    if not os.path.exists(ARCHIVE_DIR):
+        return []
+    items = []
+    for fname in sorted(os.listdir(ARCHIVE_DIR), reverse=True):
+        if not fname.endswith(".txt"):
+            continue
+        fpath = os.path.join(ARCHIVE_DIR, fname)
+        try:
+            with open(fpath, "r", encoding="utf-8") as f:
+                lines = [f.readline().strip() for _ in range(3)]
+            keyword  = lines[0].removeprefix("[키워드: ").removesuffix("]") if lines[0] else fname
+            date_str = lines[1].removeprefix("[생성일시: ").removesuffix("]") if lines[1] else ""
+            char_str = lines[2].removeprefix("[글자수: ").removesuffix("]") if lines[2] else ""
+            items.append({"fname": fname, "fpath": fpath,
+                          "keyword": keyword, "date": date_str, "chars": char_str})
+        except Exception:
+            continue
+    return items
+
+
+def read_archive_file(fpath: str) -> str:
+    try:
+        with open(fpath, "r", encoding="utf-8") as f:
+            return f.read()
+    except Exception:
+        return ""
+
 
 # ── 페이지 설정 ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -717,141 +757,148 @@ def format_research_data(rss_data, news_data, web_data=None, price_data=None, in
 SEARCH_SYSTEM = """당신은 대한민국 최고의 부동산 시장 분석가이자 서치팀 전문가입니다.
 호갱노노·네이버 부동산·KB부동산·한국부동산원·국토교통부 실거래 데이터를 정통하게 알고 있습니다.
 
-수집된 데이터를 바탕으로 아래 항목을 빠짐없이 작성하세요.
+수집된 데이터와 AI 학습 지식을 모두 활용하여 아래 항목을 빠짐없이 작성하세요.
+
+【필수 출력 — 실거래가 비교 테이블】
+키워드와 관련된 대표 아파트 3~5개를 반드시 아래 형식으로 출력하세요.
+수집 데이터에 없으면 AI 학습 지식을 활용하되 반드시 (AI추정) 표기:
+
+| 단지명 | 전용면적 | 2023년 시세 | 현재(2025) 시세 | 변동률 | 전세가율 |
+|-------|---------|------------|----------------|--------|---------|
+| 예시아파트 | 84㎡ | 8억 | 10.5억 | +31% | 52% |
 
 【실거래가 분석】
-1. 호갱노노·네이버 부동산 기준 최신 실거래가
-   - 주요 단지명, 면적(평형), 실거래 금액, 거래 시점 명시
-   - 직전 거래 대비 가격 변화 (상승/하락/보합 + 금액)
-   - 전세가율 및 갭 투자 가능 여부
-2. 매매가·전세가 변동률 (전월/전년 대비 % 수치)
-3. 거래량 증감 (전월 대비 건수)
+1. 대표 단지명·면적(평형)·실거래 금액·거래 시점 최소 3건 이상 명시
+   - 2023년 vs 현재(2024~2025) 가격 비교 (금액 + 변동률 % 반드시 포함)
+   - 직전 고점 대비 현재 위치 분석 (ex: 고점 대비 -15% 수준, 회복 중)
+   - 전세가율 % 수치와 갭 투자 가능 여부
+2. 매매가·전세가 변동률 (전년 대비 % 수치 — 없으면 AI 추정치 + (AI추정) 표기)
+3. 거래량 증감 (최근 3개월 추이)
 
 【현황 분석】
-4. 핵심 이슈 요약 (최소 5개, 구체적 수치 포함)
-5. 최근 3개월 주요 뉴스 흐름 (정책·금리·재건축·입주물량)
-6. 금리·대출규제·정부정책 등 외부 요인 분석
+4. 핵심 이슈 5가지 — 각각 구체적 수치·날짜·단지명 포함
+5. 상승/하락 촉매 요인 분석 (정책·금리·입주물량·개발 호재)
+6. 유사 시기·유사 노선/지역 비교 사례 (과거 GTX-A/신분당선/9호선 개통 전후 사례 등)
 
 【미래 예측 및 가설】
-7. 향후 3~6개월 시장 방향 시나리오 (낙관/중립/비관 3가지, 각 시나리오에 가격 예측 수치 포함)
-8. 전문가 시각의 핵심 가설 3가지 ("~한다면 ~할 것이다" 형식)
-9. 투자자·실수요자가 지금 당장 주목해야 할 변수 Top 3
+7. 향후 3~6개월 시나리오 3가지 (낙관/중립/비관 — 각 시나리오에 구체적 가격 예측 수치 포함)
+8. 핵심 가설 3가지 ("~한다면 ~% 상승/하락할 것이다" 형식으로 수치 포함)
+9. 지금 당장 주목할 매수 포인트 Top 3 (단지명 또는 역세권 명시)
 
-⚠️ 수치 정확성 규칙 (절대 위반 금지):
-- 수집된 데이터에 있는 수치만 사용. 데이터에 없는 가격·거래량·변동률·면적을 절대 지어내지 마세요.
-- 수치를 사용할 때는 반드시 출처 URL 또는 플랫폼명(호갱노노/네이버부동산/국토교통부 등)을 괄호 안에 표기.
-- 수집 데이터에 해당 수치가 없으면 숫자 대신 "데이터 미확인" 또는 "수집 데이터 부족"으로 표기.
-- 단지명·면적·금액 조합이 수집 데이터에 없으면 절대 임의로 작성하지 마세요.
-- 철도·노선 데이터가 있으면: 역명·구간·개통 예정일·수혜 아파트 단지를 반드시 분석에 포함하세요.
-- 수집 데이터에 없는 역명·노선 구간을 절대 임의로 작성하지 마세요.
-한국어로만 작성합니다.
-⚠️ 한자(漢字), 일본어(히라가나·가타카나), 중국어 사용 절대 금지.
-모든 단어는 순수 한국어 또는 영문 알파벳만 사용하세요."""
+⚠️ 작성 규칙:
+- 수집 데이터 우선 사용. 없으면 AI 학습 지식으로 채우되 반드시 (AI추정) 표기.
+- "데이터 미확인"으로 비워두는 것 금지 — 반드시 AI 추정이라도 구체적 수치 제시.
+- 수치 뒤 출처 표기: (호갱노노), (국토교통부), (네이버부동산), (AI추정) 중 하나 필수.
+- 한국어만 사용. 한자·일본어·중국어 절대 금지."""
 
 
 BLOG_SYSTEM = """당신은 대한민국 최고의 부동산 전문 칼럼니스트이자 투자 전략가입니다.
-독자에게 희망과 기회를 전하는 것을 사명으로 삼습니다.
+독자에게 구체적인 수치와 실거래 사례를 근거로 투자 판단 정보를 제공하는 것이 사명입니다.
 
-【핵심 논조 — 반드시 유지】
-- 시장은 지금 과열 조짐이 있으며 "지금이 마지막 기회"라는 긴박감을 줄 것
-- 호재·상승 요인을 전면에 배치하고 부각시킬 것
-- "지금 사지 않으면 더 비싸진다"는 메시지를 자연스럽게 녹여낼 것
-- 전망은 항상 낙관적으로, 상승 시나리오를 중심으로 서술할 것
-- 독자가 글을 읽고 나서 "빨리 행동해야겠다"는 동기부여가 생기도록 쓸 것
-- "지금 이 시장, 놓치면 후회한다" 는 톤을 전체적으로 유지
-- 수치와 데이터는 상승·호재를 뒷받침하는 방향으로 해석할 것
-
-호갱노노·네이버 부동산 실거래가 데이터를 직접 인용하여 신뢰감을 높입니다.
-데이터 → 해석(호재·상승 관점) → 시사점 → 독자 행동 촉구 흐름으로 씁니다.
+【핵심 원칙 — 반드시 준수】
+- 모든 주장에는 반드시 구체적 수치·단지명·날짜·% 변동률이 뒤따라야 함
+- "많이 올랐다", "크게 상승했다" 같은 추상적 표현 금지 → "X아파트 84㎡가 2023년 8억에서 2025년 10.5억으로 +31% 상승"처럼 구체적으로
+- 서치팀 자료의 데이터를 최우선 인용, 없으면 AI 학습 지식 활용 + (AI추정) 명기
+- 호재·상승 요인을 데이터로 뒷받침하며 독자가 "빨리 행동해야겠다"는 동기부여가 생기도록
+- 수치와 사례는 상승·호재를 뒷받침하는 방향으로 해석
 
 아래 구조를 반드시 지켜 블로그 글을 완성하세요.
 
 ━━━━━━━━━━━━━━━━━━━━━━
-글 구조 (이 순서와 분량을 절대 지킬 것)
+글 구조 (이 순서·형식 절대 준수)
 ━━━━━━━━━━━━━━━━━━━━━━
 
-## [제목] — 숫자나 핵심 키워드가 들어간 강렬한 제목
+## [제목] — 구체적 수치 또는 단지명이 들어간 강렬한 제목
+예시: "GTX-C 수혜 수원 영통 아파트, 2년 새 +28%… 개통 전 마지막 기회인가"
 
 ---
 
-### (소제목 없이 바로 본문 시작 — "들어가며" 문구 절대 출력 금지)
-- 첫 줄: 이 글 전체를 단 한 문장으로 압축한 핵심 요약 문장 (굵게 강조, 예: **"지금 강남 아파트 시장은 바닥을 다지고 있는가, 아니면 또 다른 하락의 전조인가."**)
-- 분량: 반드시 280자 이상
-- 독자에게 직접 말 거는 대화형 문장으로 시작
-- 예시: "요즘 ~에 대한 문의가 부쩍 늘고 있습니다."
-- 현재 시장 분위기를 생생하게 묘사
-- 이 글에서 다룰 3가지 핵심 내용을 자연스럽게 예고
-- 칼럼니스트 특유의 리듬감 있는 문체 유지
+### (소제목 없이 바로 본문 시작)
+**[이 글 전체를 압축한 핵심 문장 — 굵게 강조]**
+- 분량: 280자 이상
+- 독자에게 직접 말 거는 도입 (예: "요즘 ~역 주변 문의가 폭발적으로 늘고 있습니다.")
+- 핵심 수치 1~2개로 현재 시장 분위기 묘사 (예: "이 지역 거래량이 전월 대비 43% 증가했습니다")
+- 이 글에서 다룰 3가지 핵심 내용 예고
 
 ---
 
 ### ✅ 핵심 요약 3가지
-✅ **핵심 1:** [수치·사실 포함한 2문장 요약]
-✅ **핵심 2:** [수치·사실 포함한 2문장 요약]
-✅ **핵심 3:** [수치·사실 포함한 2문장 요약]
+✅ **핵심 1:** [단지명·가격 수치 포함한 2문장 — 예: "XX아파트 84㎡, 2023년 9억 → 2025년 11.8억(+31%)"]
+✅ **핵심 2:** [% 변동률·거래량 수치 포함한 2문장]
+✅ **핵심 3:** [개통일·투자 포인트 포함한 2문장]
 
 ---
 
-### 📊 숫자로 보는 시장
-📊 **① [실거래가 현황]**
-[호갱노노·네이버 부동산 기준 단지명·평형·실거래 금액·거래 시점 → 전월 대비 변화 해설 3~4문장 → 출처 명기]
+### 📊 실거래가로 보는 시장
 
-📊 **② [거래량·전세가율]**
-[거래량 수치 + 전세가율 % → 갭투자 가능성·임차 시장 해설 3~4문장 → 출처 명기]
+📊 **① 주요 단지 실거래가 비교 (2023 vs 2025)**
+반드시 아래 형식의 표를 출력하세요:
 
-📊 **③ [외부 변수 수치]**
-[금리·대출규제·입주물량 등 핵심 수치 → 시장에 미치는 영향 3~4문장 → 출처 명기]
+| 단지명 | 전용면적 | 2023년 | 현재(2025) | 변동률 | 전세가율 |
+|-------|---------|--------|-----------|--------|---------|
+| (단지1) | 84㎡ | N억 | N억 | +N% | N% |
+| (단지2) | 59㎡ | N억 | N억 | +N% | N% |
+| (단지3) | 114㎡ | N억 | N억 | +N% | N% |
+
+(서치팀 자료 기준, 없으면 AI 추정치 + (AI추정) 표기)
+
+📊 **② 거래량·전세가율 분석**
+- 최근 3개월 거래량 수치 (전년 동기 대비 %)
+- 전세가율 % → 갭 규모 계산 (예: "10억 매매가, 전세가율 55% → 갭 4.5억")
+- 임차 수요 동향
+
+📊 **③ 외부 변수 수치**
+- 기준금리 현황 + 주담대 금리 범위
+- 대출 규제 현황 (LTV·DSR 수치)
+- 해당 지역·노선 관련 정부 정책 발표 날짜
 
 ---
 
-### 핵심 1: [소제목 — 실거래가 분석]
-- 분량: 반드시 420자 이상
-- 호갱노노·네이버 부동산에서 확인한 실거래가를 단지명·면적·금액으로 직접 인용
-- 데이터 → 해석 → 시사점 순서로 3~4단락 작성
+### 핵심 1: [소제목 — 실거래가·가격 변화 심층 분석]
+- 분량: 420자 이상
+- 반드시 단지명·평형·가격·거래 시점 최소 3건 직접 인용
+- "X아파트 84㎡, 2023년 8억 5천 → 2024년 11억 → 2025년 현재 호가 12억 5천(+47%)" 형식
+- 직전 고점 대비 현재 위치 분석 (회복률 %)
+- 전세가율과 갭 규모로 실투자금 계산 예시
 - "이 수치가 의미하는 것은" 형식으로 분석 깊이 더하기
-- 독자가 직접 활용할 수 있는 구체적 인사이트 포함
 
 ---
 
-### 핵심 2: [소제목 — 호재 및 상승 동력]
-- 분량: 반드시 420자 이상
-- 이 지역·단지·키워드를 지금 주목해야 하는 이유를 호재 중심으로 서술
-- 개발 호재·교통 호재·정비사업·공급 감소 등 상승 요인 집중 부각
-- "이미 늦었다고 생각할 때가 아직 기회"라는 논리 전개
-- 과거 유사 국면에서 가격이 어떻게 뛰었는지 비교 사례 활용
+### 핵심 2: [소제목 — 호재 및 상승 동력 — 구체적 근거 제시]
+- 분량: 420자 이상
+- 교통 호재: 개통 예정 노선명·역명·개통일·해당 역까지 이동 시간 단축 효과
+- 과거 유사 사례 비교: "GTX-A 동탄역 개통 발표 후 동탄2신도시 아파트 2년 새 N억 상승"처럼 수치로
+- 개발 호재: 구역 지정일·사업 단계·예상 준공 시기
+- "지금이 아직 기회인 이유"를 데이터로 설득
 
 ---
 
-### 핵심 3: [소제목 — 지금 사야 하는 이유]
-- 분량: 반드시 420자 이상
-- 낙관 시나리오를 중심에 놓고 "지금이 적기"임을 근거와 함께 설득
-- 금리 인하 가능성·정부 부양 정책·공급 부족 등 상승 촉매 강조
-- 망설이면 놓친다는 긴박감을 자연스럽게 부여
-- 독자가 지금 당장 취할 수 있는 구체적 매수 전략 3가지 제안
-- "지금 행동하지 않으면 1년 후 후회한다" 는 메시지로 마무리
+### 핵심 3: [소제목 — 지금 매수해야 하는 이유·투자 전략]
+- 분량: 420자 이상
+- 낙관 시나리오: 개통/정책 실현 시 예상 가격 범위 (예: "개통 후 추가 N억~N억 상승 예상")
+- 구체적 매수 전략 3가지 (단지명·평형·예산 범위 명시)
+  전략 1: 역세권 핵심 단지 (예: "X역 도보 5분, Y아파트 84㎡ 예산 N억대")
+  전략 2: 수혜권 인근 가성비 단지
+  전략 3: 갭투자 가능 단지 (전세가율 60% 이상 단지)
+- "지금 행동하지 않으면 N년 후 후회한다" 는 메시지로 마무리
 
 ---
 
 ### 마무리
-- 분량: 반드시 220자 이상
+- 분량: 220자 이상
 - "결국 이 시장이 말하는 것은 ~입니다"로 시작
-- 희망적이고 긍정적인 어조로 전체 내용 정리
-- 독자에게 "지금이 기회"임을 확신시키는 강렬한 마지막 문장
-- 행동을 촉구하는 문장으로 끝낼 것 (예: "오늘이 가장 싼 날일 수 있습니다")
+- 핵심 수치 1~2개로 전체 내용 압축 정리
+- 행동을 촉구하는 강렬한 마지막 문장 (예: "오늘이 가장 싼 날일 수 있습니다")
 
 ━━━━━━━━━━━━━━━━━━━━━━
 필수 규칙 (위반 절대 금지)
 ━━━━━━━━━━━━━━━━━━━━━━
-- 총 글자 수: 반드시 2600자 이상 3200자 이하 (공백·줄바꿈 제외)
-- 전체 논조는 반드시 낙관적·긍정적·희망적으로 유지
-- 비관적 표현·하락 전망·리스크 강조는 최소화 (언급 시 반드시 "그럼에도 불구하고~" 로 희망적으로 전환)
-- Q: 또는 Q. 로 시작하는 문장 절대 작성 금지
-- 질문-답변(Q&A) 형식 절대 사용 금지
-- 글자 수 표기 금지
-- 섹션을 생략하거나 짧게 줄이는 것 금지
-- 한국어로만 작성 (한자·일본어·중국어 절대 사용 금지)
-- 수치 데이터 반드시 포함 (없으면 부동산 시장 일반 수치 활용)
-- 히라가나·가타카나·漢字 등 비한국어 문자 출력 절대 금지"""
+- 총 글자 수: 2600자 이상 (공백·줄바꿈 제외)
+- 추상적 표현 금지: "많이 올랐다/크게 상승했다" → 반드시 구체적 수치로 대체
+- "데이터 미확인"으로 비워두는 것 금지 — AI 추정이라도 구체적 수치 반드시 제시
+- Q: / Q. 형식 절대 금지 / Q&A 형식 절대 금지
+- 각 섹션 생략 금지 / 실거래가 비교 표 반드시 포함
+- 한국어만 사용. 한자·일본어·중국어 절대 금지"""
 
 
 # ── AI 팀 함수 ────────────────────────────────────────────────────────────────
@@ -863,35 +910,42 @@ def run_search_team(keyword: str, api_key: str, rss_data, news_data, web_data=No
         user_msg = (
             f"분석 키워드: {keyword}\n\n"
             f"--- 수집된 데이터 ---\n{raw}\n---\n\n"
-            "위 데이터를 바탕으로 아래 항목을 작성해 주세요.\n"
-            "1. 핵심 정보 요약 (규정·기준·절차·계산법 등)\n"
-            "2. 구체적 예시 또는 사례 (수치 포함)\n"
-            "3. 자주 하는 실수·주의사항\n"
-            "4. 2025년 최신 변경사항 (있으면)\n"
-            "5. 독자가 바로 활용할 수 있는 핵심 팁 3가지"
+            "위 데이터와 AI 학습 지식을 모두 활용하여 아래 항목을 작성해 주세요.\n"
+            "1. 핵심 정보 요약 (규정·기준·절차·계산법 등) — 수치와 날짜 포함\n"
+            "2. 실제 계산 예시 케이스 2~3가지 (금액·비율·단계별 수치 포함)\n"
+            "3. 자주 하는 실수·주의사항 (구체적 사례)\n"
+            "4. 2024~2025년 최신 변경사항\n"
+            "5. 독자가 바로 활용할 수 있는 핵심 팁 3가지\n\n"
+            "⚠️ 수치가 없으면 AI 추정치를 사용하되 (AI추정) 표기. '데이터 미확인'으로 비워두지 말 것."
         )
     elif is_railway:
         user_msg = (
             f"분석 키워드: {keyword}\n\n"
             f"--- 수집된 데이터 ---\n{raw}\n---\n\n"
-            "위 데이터를 바탕으로 아래 항목을 모두 작성해 주세요.\n\n"
+            "위 데이터와 AI 학습 지식을 모두 활용하여 아래 항목을 모두 작성해 주세요.\n\n"
             "【철도·노선 전용 분석 항목】\n"
             "1. 노선 개요 (구간·역 목록·총연장·개통 예정 시기)\n"
-            "2. 주요 역세권 아파트 단지명과 현재 시세 (수집 데이터 기준, 없으면 '데이터 미확인')\n"
-            "3. 개통 전·후 역세권 부동산 가격 변화 사례 (유사 노선 비교 포함)\n"
-            "4. 지금 주목할 역세권 Top 3와 투자 포인트\n"
-            "5. 향후 3~6개월 시장 시나리오 (낙관·중립·비관)\n"
-            "6. 전문가 가설 3가지 ('~한다면 ~할 것이다' 형식)\n\n"
-            "⚠️ 수집 데이터에 없는 역명·단지명·가격은 절대 지어내지 마세요. '데이터 미확인'으로 표기."
+            "2. 역세권별 대표 아파트 단지명 + 2023년 시세 vs 현재(2025) 시세 + 변동률 % (테이블 형식)\n"
+            "3. 과거 유사 노선 개통 전후 가격 변화 실사례\n"
+            "   예: 'GTX-A 동탄역 개통 발표(2019) 후 동탄2신도시 N억→N억', '9호선 2단계 개통 후 강서 N% 상승'\n"
+            "4. 지금 주목할 역세권 Top 3 + 단지명·예산 범위·투자 포인트\n"
+            "5. 향후 시나리오 3가지 (낙관·중립·비관 — 각각 가격 예측 수치 포함)\n"
+            "6. 핵심 가설 3가지 ('개통 시 N억 상승 예상' 형식으로 수치 포함)\n\n"
+            "⚠️ 수집 데이터 우선 사용. 없으면 AI 학습 지식으로 채우되 (AI추정) 표기. '미확인'으로 비워두기 금지."
         )
     else:
         user_msg = (
             f"분석 키워드: {keyword}\n\n"
             f"--- 수집된 데이터 ---\n{raw}\n---\n\n"
-            "위 데이터를 바탕으로 현황 분석과 미래 예측·가설을 모두 작성해 주세요.\n"
-            "특히 호갱노노·네이버 부동산 실거래가 데이터를 최우선으로 활용하고,\n"
-            "구체적인 단지명·면적·가격·거래 시점을 반드시 포함하세요.\n"
-            "⚠️ 수집 데이터에 없는 가격·거래량·단지명은 절대 작성하지 말고 '데이터 미확인'으로 표기하세요."
+            "위 데이터와 AI 학습 지식을 모두 활용하여 현황 분석과 미래 예측을 작성해 주세요.\n\n"
+            "【필수 포함 항목】\n"
+            "1. 대표 아파트 3~5개의 2023년 시세 vs 현재(2025) 시세 비교 테이블\n"
+            "   형식: 단지명 | 전용면적 | 2023년 | 현재 | 변동률 | 전세가율\n"
+            "2. 실거래 사례 3건 이상 (단지명·면적·금액·거래 시점)\n"
+            "3. 전세가율 % + 갭 투자 시 실투자금 계산 예시\n"
+            "4. 상승/하락 촉매 요인 (구체적 정책명·날짜·수치)\n"
+            "5. 시나리오 3가지 (낙관·중립·비관 — 각각 가격 예측 수치 포함)\n\n"
+            "⚠️ 수집 데이터 우선 사용. 없으면 AI 학습 지식으로 채우되 (AI추정) 표기. '미확인'으로 비워두기 금지."
         )
     stream = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
@@ -918,13 +972,12 @@ def run_blog_team(keyword: str, research: str, api_key: str, kw_type: str = "pri
             "위 자료를 바탕으로 블로그 글을 작성하세요.\n\n"
             "【필수 조건 — 반드시 준수】\n"
             "- 총 글자 수 2600자 이상 (공백 제외)\n"
-            "- 이 글은 정보·가이드형 — 실거래가 언급 금지\n"
-            "- 서치팀 자료의 규정·절차·수치·예시만 사용\n"
-            "- 독자가 바로 따라할 수 있는 실용적 설명\n"
-            "- 계산식·표·예시 케이스 반드시 포함\n"
-            "- Q: / Q. 형식 절대 사용 금지\n"
-            "- Q&A 형식 절대 사용 금지\n"
-            "- 각 섹션 절대 생략 금지\n"
+            "- 정보·가이드형 글 — 규정·절차·계산법 중심\n"
+            "- 계산 예시는 반드시 실제 금액 수치로 (예: '매매가 5억, LTV 70% → 대출 3.5억')\n"
+            "- 표 형식으로 조건·기준·한도 정리 (최소 1개 표 필수)\n"
+            "- 실수 사례: 구체적 상황 묘사 (예: '전입신고를 계약 후 2주가 넘어 하면 확정일자 효력이...')\n"
+            "- Q: / Q. 형식·Q&A 형식 절대 금지\n"
+            "- 각 섹션 생략 금지\n"
             "- 10년 경력 부동산 전문가 설명 문체"
         )
     elif is_railway:
@@ -934,18 +987,13 @@ def run_blog_team(keyword: str, research: str, api_key: str, kw_type: str = "pri
             "위 자료를 바탕으로 블로그 글을 작성하세요.\n\n"
             "【철도·노선 전용 필수 조건 — 반드시 준수】\n"
             "- 총 글자 수 2600자 이상 (공백 제외)\n"
-            "- 들어가며 280자 이상\n"
-            "- 핵심 1·2·3 각각 420자 이상\n"
-            "- 마무리 220자 이상\n"
-            "- 핵심 1: 반드시 노선 구간·역 목록·개통 시기를 구체적으로 서술\n"
-            "- 핵심 2: 반드시 역세권별 수혜 아파트와 시세 동향을 중심으로 서술\n"
-            "- 핵심 3: 반드시 '개통 전 지금이 매수 적기'라는 논거와 구체적 투자 전략 3가지 제시\n"
-            "- 서치팀 자료에 있는 역명·단지명·가격만 인용, 없으면 '수집 데이터 미확인'으로 표기\n"
-            "- 수치 뒤에 반드시 출처 표기 예: (국토교통부), (네이버 부동산), (호갱노노)\n"
-            "- 수집 데이터에 없는 역명·가격·면적을 절대 임의로 작성하지 말 것\n"
-            "- Q: / Q. 형식 절대 사용 금지\n"
-            "- Q&A 형식 절대 사용 금지\n"
-            "- 각 섹션 절대 생략 금지\n"
+            "- 실거래가 비교 표 반드시 포함 (단지명·2023년·현재·변동률·전세가율)\n"
+            "- 핵심 1: 노선 구간·역 목록·개통 시기 + 역세권 아파트 2023→2025 가격 비교\n"
+            "- 핵심 2: 과거 유사 노선 사례(GTX-A/9호선/신분당선 등) 개통 전후 수치 비교\n"
+            "- 핵심 3: 구체적 투자 전략 3가지 (역 이름·단지명·예산 범위·갭 투자 가능 여부)\n"
+            "- 수치 뒤 출처 표기: (국토교통부), (호갱노노), (AI추정) 중 하나 필수\n"
+            "- 추상적 표현 금지 → 모든 주장은 수치로 뒷받침\n"
+            "- Q: / Q. 형식·Q&A 형식 절대 금지 / 각 섹션 생략 금지\n"
             "- 10년 경력 부동산 칼럼니스트 분석 문체"
         )
     else:
@@ -955,16 +1003,13 @@ def run_blog_team(keyword: str, research: str, api_key: str, kw_type: str = "pri
             "위 자료를 바탕으로 블로그 글을 작성하세요.\n\n"
             "【필수 조건 — 반드시 준수】\n"
             "- 총 글자 수 2600자 이상 (공백 제외)\n"
-            "- 들어가며 280자 이상\n"
-            "- 핵심 1·2·3 각각 420자 이상\n"
-            "- 마무리 220자 이상\n"
-            "- Q: / Q. 형식 절대 사용 금지\n"
-            "- Q&A 형식 절대 사용 금지\n"
-            "- 각 섹션 절대 생략 금지\n"
-            "- 서치팀 자료에 있는 실거래가·수치만 인용 (없으면 '확인된 거래 데이터 부족' 으로 표기)\n"
-            "- 단지명·면적·금액은 서치팀 자료에 명시된 것만 사용, 절대 임의로 지어내지 말 것\n"
-            "- 수치 뒤에 반드시 출처 플랫폼 표기 예: (네이버 부동산), (호갱노노), (국토교통부)\n"
-            "- 단순 정보 나열 금지 — 데이터 → 해석 → 시사점 흐름으로 작성\n"
+            "- 실거래가 비교 표 반드시 포함 (단지명·2023년 시세·현재 시세·변동률·전세가율)\n"
+            "- 핵심 1: 단지명·평형·실거래 금액·변동률 최소 3건 인용 + 갭 투자 실투자금 계산\n"
+            "- 핵심 2: 호재 근거는 반드시 수치로 ('교통 좋아졌다' 금지 → '역까지 도보 N분·버스 N분 단축')\n"
+            "- 핵심 3: 투자 전략 3가지에 단지명·예산 범위·매수 포인트 명시\n"
+            "- 수치 뒤 출처: (호갱노노), (국토교통부), (AI추정) 중 하나 필수\n"
+            "- 추상적 표현 금지 → 모든 주장은 수치로 뒷받침\n"
+            "- Q: / Q. 형식·Q&A 형식 절대 금지 / 각 섹션 생략 금지\n"
             "- 10년 경력 부동산 칼럼니스트 분석 문체"
         )
     stream = client.chat.completions.create(
@@ -1062,6 +1107,92 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# ── 저장소 ────────────────────────────────────────────────────────────────────
+if "show_archive" not in st.session_state:
+    st.session_state.show_archive = False
+if "archive_view_idx" not in st.session_state:
+    st.session_state.archive_view_idx = -1
+
+_archive_label = "📂 저장소 닫기" if st.session_state.show_archive else "📂 저장소"
+if st.button(_archive_label, use_container_width=True):
+    st.session_state.show_archive = not st.session_state.show_archive
+    st.session_state.archive_view_idx = -1
+    st.rerun()
+
+if st.session_state.show_archive:
+    _archive_files = load_archive()
+
+    if not _archive_files:
+        st.markdown("""
+        <div style='background:#F9FAFB; border-radius:14px; padding:32px; text-align:center; margin-bottom:16px;'>
+            <div style='font-size:32px; margin-bottom:8px;'>📭</div>
+            <div style='font-size:15px; font-weight:700; color:#191F28;'>저장된 글이 없습니다</div>
+            <div style='font-size:13px; color:#8B95A1; margin-top:4px;'>블로그를 생성하면 자동으로 여기에 저장됩니다</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    elif st.session_state.archive_view_idx >= 0 and st.session_state.archive_view_idx < len(_archive_files):
+        # ── 상세 보기 ──────────────────────────────────────────────────────────
+        _item = _archive_files[st.session_state.archive_view_idx]
+        _content = read_archive_file(_item["fpath"])
+
+        col_back, col_dl = st.columns([1, 1])
+        with col_back:
+            if st.button("← 목록으로", use_container_width=True):
+                st.session_state.archive_view_idx = -1
+                st.rerun()
+        with col_dl:
+            st.download_button(
+                "💾 다운로드 (.txt)",
+                data=_content,
+                file_name=_item["fname"],
+                mime="text/plain",
+                use_container_width=True,
+            )
+
+        st.markdown(f"""
+        <div style='margin:16px 0 4px 0;'>
+            <div style='font-size:20px; font-weight:900; color:#191F28;'>{_item['keyword']}</div>
+            <div style='font-size:12px; color:#8B95A1; margin-top:4px;'>🗓 {_item['date']} &nbsp;·&nbsp; 📝 {_item['chars']}</div>
+        </div>
+        <hr style='border:none; border-top:1px solid #E5E8EB; margin:12px 0 20px 0;'>
+        """, unsafe_allow_html=True)
+
+        # 블로그 글 본문만 추출해서 표시 (=== 블로그 글 === 이후)
+        _blog_part = _content
+        if "=== 블로그 글 ===" in _content:
+            _blog_part = _content.split("=== 블로그 글 ===", 1)[1].strip()
+        st.markdown(_blog_part)
+
+    else:
+        # ── 카드 목록 ──────────────────────────────────────────────────────────
+        st.markdown(f"""
+        <div style='font-size:13px; color:#8B95A1; margin:0 0 12px 0;'>
+            총 <b style='color:#191F28;'>{len(_archive_files)}개</b> 저장됨 &nbsp;·&nbsp; 최신순
+        </div>
+        """, unsafe_allow_html=True)
+
+        for _i, _item in enumerate(_archive_files):
+            _col_info, _col_btn = st.columns([8, 2])
+            with _col_info:
+                st.markdown(f"""
+                <div style='background:#FFFFFF; border-radius:12px; padding:14px 18px;
+                            box-shadow:0 1px 4px rgba(0,0,0,0.06); margin-bottom:8px;
+                            border-left:3px solid #3182F6;'>
+                    <div style='font-size:15px; font-weight:700; color:#191F28;'>📄 {_item['keyword']}</div>
+                    <div style='font-size:12px; color:#8B95A1; margin-top:4px;'>
+                        🗓 {_item['date']} &nbsp;·&nbsp; 📝 {_item['chars']}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            with _col_btn:
+                st.markdown("<div style='padding-top:8px;'></div>", unsafe_allow_html=True)
+                if st.button("열기", key=f"arch_open_{_i}", use_container_width=True):
+                    st.session_state.archive_view_idx = _i
+                    st.rerun()
+
+    st.markdown("<hr style='border:none; border-top:1px solid #E5E8EB; margin:20px 0;'>", unsafe_allow_html=True)
+
 # ── API 키 상태 표시 (항상 최상단) ────────────────────────────────────────────
 if api_key:
     st.success(f"✅ API 키 로드됨: {api_key[:6]}...{api_key[-4:]}")
@@ -1084,17 +1215,29 @@ if "selected_keyword" not in st.session_state:
 trend_btn = st.button("📊 최근 1개월 TOP 30 조회", use_container_width=True)
 if trend_btn:
     if not api_key:
-        st.error("❌ API 키가 없습니다. Streamlit Cloud Secrets를 확인해 주세요.")
+        st.error("❌ API 키가 없습니다. 사이드바에서 Groq API 키를 입력해 주세요.")
     else:
+        _status_placeholder = st.empty()
+        _status_placeholder.info("⏳ 키워드 분석을 시작합니다...")
         try:
-            with st.spinner("네이버·호갱노노·직방 데이터 분석 중... (30초~1분 소요)"):
-                st.session_state.trending_keywords = get_trending_keywords(api_key)
+            def _update_status(msg):
+                _status_placeholder.info(msg)
+
+            st.session_state.trending_keywords = get_trending_keywords(api_key, status_fn=_update_status)
             if st.session_state.trending_keywords:
-                st.success(f"✅ 키워드 {len(st.session_state.trending_keywords)}개 로드 완료!")
+                _status_placeholder.success(f"✅ 키워드 {len(st.session_state.trending_keywords)}개 로드 완료!")
             else:
-                st.warning("⚠️ 검색 데이터를 가져오지 못했습니다. 네트워크 문제일 수 있어요. 아래 키워드 입력창에 직접 입력해 주세요.")
+                _status_placeholder.error("❌ 키워드 생성 실패 — API 키를 확인하거나 잠시 후 다시 시도해 주세요.")
         except Exception as e:
-            st.error(f"❌ 오류 발생: {e}")
+            err = str(e)
+            if "auth" in err.lower() or "invalid" in err.lower() or "api_key" in err.lower():
+                _status_placeholder.error("❌ Groq API 키가 올바르지 않습니다. 사이드바에서 확인해 주세요.")
+            elif "rate" in err.lower() or "quota" in err.lower() or "429" in err:
+                _status_placeholder.error("⏱️ Groq 사용 한도 초과. 잠시 후 다시 시도해 주세요.")
+            elif "connect" in err.lower() or "timeout" in err.lower():
+                _status_placeholder.error("🌐 연결 오류. 인터넷 연결을 확인해 주세요.")
+            else:
+                _status_placeholder.error(f"❌ 오류: {e}")
 
 if st.session_state.trending_keywords:
     st.markdown("<div style='font-size:12px; color:#8B95A1; margin:10px 0 6px 0;'>클릭하면 키워드 입력창에 자동 입력됩니다</div>", unsafe_allow_html=True)
@@ -1292,6 +1435,10 @@ if run_btn:
         st.stop()
 
     char_count = len(blog_text.replace(" ", "").replace("\n", ""))
+
+    # 자동 저장
+    saved_fname = auto_save_blog(kw, research_text, blog_text)
+
     st.markdown("<hr style='border:none; border-top:1px solid #E5E8EB; margin:20px 0;'>", unsafe_allow_html=True)
 
     # ── 완성 결과 카드 ────────────────────────────────────────────────────────
@@ -1299,7 +1446,10 @@ if run_btn:
     <div class='toss-card' style='border-left: 4px solid #1BB76E;'>
         <div class='toss-tag-green'>완성</div>
         <div class='toss-h2'>🎉 블로그 글 완성</div>
-        <div class='toss-body'>총 <b style='color:#191F28;'>{char_count:,}자</b> (공백 제외) 작성되었습니다.</div>
+        <div class='toss-body'>
+            총 <b style='color:#191F28;'>{char_count:,}자</b> (공백 제외) 작성되었습니다.<br>
+            <span style='font-size:12px; color:#1BB76E;'>✅ 저장소에 자동 저장됨 — {saved_fname}</span>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
