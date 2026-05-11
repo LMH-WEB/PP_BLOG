@@ -1299,14 +1299,30 @@ if st.session_state.trending_keywords:
 
 st.markdown("<hr style='border:none; border-top:1px solid #F2F4F6; margin:16px 0;'>", unsafe_allow_html=True)
 
-# ── 키워드 입력 ────────────────────────────────────────────────────────────────
-st.markdown("<div style='font-size:15px; font-weight:700; color:#191F28; margin:8px 0 8px 0;'>키워드 입력</div>", unsafe_allow_html=True)
-keyword = st.text_input(
-    "keyword",
-    value=st.session_state.selected_keyword,
-    placeholder="예: 강남 아파트,  전세사기,  재건축,  부동산 규제 ...",
-    label_visibility="collapsed",
-)
+# ── 키워드 입력 (최대 5개) ────────────────────────────────────────────────────
+st.markdown("""
+<div style='font-size:15px; font-weight:700; color:#191F28; margin:8px 0 4px 0;'>키워드 입력 <span style='font-size:12px; font-weight:400; color:#8B95A1;'>최대 5개 — 결과는 txt 파일로 다운로드됩니다</span></div>
+""", unsafe_allow_html=True)
+
+_kw_placeholders = [
+    "예: 강남 아파트 매수 타이밍",
+    "예: 전세사기 예방법",
+    "예: GTX-C 역세권 투자",
+    "예: 재건축 투자 지금 해도 될까",
+    "예: 부동산 취득세 계산법",
+]
+_kw_values = []
+for _i in range(5):
+    _default = st.session_state.selected_keyword if _i == 0 else ""
+    _kw_val = st.text_input(
+        f"키워드 {_i + 1}",
+        value=_default,
+        placeholder=_kw_placeholders[_i],
+        key=f"kw_input_{_i}",
+        label_visibility="collapsed",
+    )
+    _kw_values.append(_kw_val)
+
 run_btn = st.button("🚀 블로그 생성 시작", use_container_width=True)
 
 
@@ -1315,165 +1331,133 @@ if run_btn:
     if not api_key:
         st.error("사이드바에서 Groq API 키를 먼저 입력해 주세요.")
         st.stop()
-    if not keyword.strip():
-        st.error("키워드를 입력해 주세요.")
+
+    _keywords_to_run = [kw.strip() for kw in _kw_values if kw.strip()]
+    if not _keywords_to_run:
+        st.error("키워드를 최소 1개 이상 입력해 주세요.")
         st.stop()
 
-    kw = keyword.strip()
     st.markdown("<hr style='border:none; border-top:1px solid #E5E8EB; margin:24px 0 20px 0;'>", unsafe_allow_html=True)
 
-    # ── STEP 0: 데이터 수집 ───────────────────────────────────────────────────
-    st.markdown("""
-    <div class='toss-card'>
-        <div class='toss-tag'>STEP 0</div>
-        <div class='toss-h2'>📡 데이터 수집</div>
-        <div class='toss-body'>키워드 분석 후 맞춤 데이터 수집 중...</div>
-    </div>
-    """, unsafe_allow_html=True)
+    _results = []
 
-    kw_type   = detect_keyword_type(kw)
-    is_railway = detect_railway_keyword(kw)
-    info_data    = []
-    price_data   = []
-    railway_data = []
-
-    with st.spinner("수집 중..."):
-        rss_data  = fetch_rss(kw)
-        news_data = search_news(kw)
-        web_data  = search_web_docs(kw)
-        if kw_type == "info":
-            info_data = search_info_data(kw)
-        else:
-            price_data = search_price_data(kw)
-        if is_railway:
-            railway_data = search_railway_data(kw)
-
-    if is_railway:
-        type_label = "🚆 철도·노선형"
-    elif kw_type == "info":
-        type_label = "📋 정보·가이드형"
-    else:
-        type_label = "💰 가격·시세형"
-    st.markdown(f"<div style='font-size:12px; color:#3182F6; font-weight:700; margin:8px 0;'>키워드 유형 감지: {type_label}</div>", unsafe_allow_html=True)
-
-    extra_data = info_data if kw_type == "info" else price_data
-    extra_label = "정보·가이드" if kw_type == "info" else "실거래가"
-    total = len(rss_data) + len(news_data) + len(web_data) + len(extra_data) + len(railway_data)
-    col1, col2, col3, col4, col5 = st.columns(5)
-    with col1:
-        st.markdown(f"<div class='metric-card'><div class='metric-num'>{len(extra_data)}</div><div class='metric-label'>{extra_label}</div></div>", unsafe_allow_html=True)
-    with col2:
-        st.markdown(f"<div class='metric-card'><div class='metric-num'>{len(news_data)}</div><div class='metric-label'>최신 뉴스</div></div>", unsafe_allow_html=True)
-    with col3:
-        st.markdown(f"<div class='metric-card'><div class='metric-num'>{len(web_data)}</div><div class='metric-label'>웹문서·블로그</div></div>", unsafe_allow_html=True)
-    with col4:
-        st.markdown(f"<div class='metric-card'><div class='metric-num'>{len(rss_data)}</div><div class='metric-label'>RSS 기사</div></div>", unsafe_allow_html=True)
-    with col5:
-        st.markdown(f"<div class='metric-card'><div class='metric-num'>{len(railway_data)}</div><div class='metric-label'>철도·노선</div></div>", unsafe_allow_html=True)
-
-    if total > 0:
-        with st.expander(f"📂 수집된 원본 데이터 보기 (총 {total}건)"):
-            st.text(format_research_data(rss_data, news_data, web_data, price_data, info_data, railway_data)[:5000])
-
-    st.markdown("<hr style='border:none; border-top:1px solid #E5E8EB; margin:20px 0;'>", unsafe_allow_html=True)
-
-    # ── STEP 1: 서치팀 ────────────────────────────────────────────────────────
-    st.markdown("""
-    <div class='toss-card'>
-        <div class='toss-tag'>STEP 1</div>
-        <div class='toss-h2'>🔍 서치팀 — 현황 분석 + 미래 예측</div>
-        <div class='toss-body'>수집 데이터 기반 심층 분석 및 시나리오 도출 중...</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    try:
-        _research_box = st.empty()
-        research_text = ""
-        for _chunk in run_search_team(kw, api_key, rss_data, news_data, web_data, price_data, info_data, kw_type, railway_data):
-            research_text += _chunk
-            _research_box.markdown(research_text)
-    except Exception as e:
-        err = str(e)
-        if "auth" in err.lower() or "invalid" in err.lower():
-            st.error("❌ Groq API 키가 올바르지 않습니다. 사이드바에서 확인해 주세요.")
-        elif "rate" in err.lower() or "quota" in err.lower():
-            st.error("⏱️ 사용 한도 초과. 잠시 후 다시 시도해 주세요.")
-        elif "connect" in err.lower() or "connection" in err.lower():
-            st.error("🌐 연결 오류. 인터넷 연결을 확인하거나 잠시 후 다시 시도해 주세요.")
-        else:
-            st.error(f"서치팀 오류: {e}")
-        st.stop()
-
-    st.success("✅ 서치팀 분석 완료!")
-    st.markdown("<hr style='border:none; border-top:1px solid #E5E8EB; margin:20px 0;'>", unsafe_allow_html=True)
-
-    # ── STEP 2: 블로그팀 ──────────────────────────────────────────────────────
-    st.markdown("""
-    <div class='toss-card'>
-        <div class='toss-tag-green'>STEP 2</div>
-        <div class='toss-h2'>✍️ 블로그팀 — 전문 칼럼 작성</div>
-        <div class='toss-body'>10년 경력 부동산 카피라이터가 글을 작성합니다...</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    try:
-        _blog_box = st.empty()
-        blog_text = ""
-        for _chunk in run_blog_team(kw, research_text, api_key, kw_type, is_railway):
-            blog_text += _chunk
-            _blog_box.markdown(blog_text)
-    except Exception as e:
-        err = str(e)
-        if "auth" in err.lower() or "invalid" in err.lower():
-            st.error("❌ Groq API 키가 올바르지 않습니다.")
-        elif "rate" in err.lower() or "quota" in err.lower():
-            st.error("⏱️ 사용 한도 초과. 잠시 후 다시 시도해 주세요.")
-        elif "connect" in err.lower() or "connection" in err.lower():
-            st.error("🌐 연결 오류. 잠시 후 다시 시도해 주세요.")
-        else:
-            st.error(f"블로그팀 오류: {e}")
-        st.stop()
-
-    char_count = len(blog_text.replace(" ", "").replace("\n", ""))
-
-    # 자동 저장
-    saved_fname = auto_save_blog(kw, research_text, blog_text)
-
-    st.markdown("<hr style='border:none; border-top:1px solid #E5E8EB; margin:20px 0;'>", unsafe_allow_html=True)
-
-    # ── 완성 결과 카드 ────────────────────────────────────────────────────────
-    st.markdown(f"""
-    <div class='toss-card' style='border-left: 4px solid #1BB76E;'>
-        <div class='toss-tag-green'>완성</div>
-        <div class='toss-h2'>🎉 블로그 글 완성</div>
-        <div class='toss-body'>
-            총 <b style='color:#191F28;'>{char_count:,}자</b> (공백 제외) 작성되었습니다.<br>
-            <span style='font-size:12px; color:#1BB76E;'>✅ 저장소에 자동 저장됨 — {saved_fname}</span>
+    for _idx, kw in enumerate(_keywords_to_run):
+        st.markdown(f"""
+        <div class='toss-card' style='padding:16px 20px; margin-bottom:8px;'>
+            <div style='font-size:12px; color:#8B95A1; font-weight:700;'>{_idx + 1} / {len(_keywords_to_run)}</div>
+            <div style='font-size:16px; font-weight:800; color:#191F28; margin-top:2px;'>{kw}</div>
         </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
-    # ── 다운로드 ──────────────────────────────────────────────────────────────
-    col_dl1, col_dl2 = st.columns(2)
-    with col_dl1:
-        st.download_button(
-            "💾 블로그 글 다운로드 (.txt)",
-            data=strip_markdown(blog_text),
-            file_name=f"블로그_{kw}.txt",
-            mime="text/plain",
-            use_container_width=True,
-        )
-    with col_dl2:
-        full_report = (
-            f"[키워드: {kw}]\n\n"
-            f"=== 수집 데이터 ===\n{format_research_data(rss_data, news_data, web_data)}\n\n"
-            f"=== 서치팀 분석 ===\n{strip_markdown(research_text)}\n\n"
-            f"=== 블로그 글 ===\n{strip_markdown(blog_text)}"
-        )
-        st.download_button(
-            "📋 전체 리포트 다운로드 (.txt)",
-            data=full_report,
-            file_name=f"리포트_{kw}.txt",
-            mime="text/plain",
-            use_container_width=True,
-        )
+        _status = st.empty()
+
+        # STEP 0: 데이터 수집
+        _status.info("📡 데이터 수집 중...")
+        kw_type    = detect_keyword_type(kw)
+        is_railway = detect_railway_keyword(kw)
+        info_data    = []
+        price_data   = []
+        railway_data = []
+        try:
+            rss_data  = fetch_rss(kw)
+            news_data = search_news(kw)
+            web_data  = search_web_docs(kw)
+            if kw_type == "info":
+                info_data = search_info_data(kw)
+            else:
+                price_data = search_price_data(kw)
+            if is_railway:
+                railway_data = search_railway_data(kw)
+        except Exception as _e:
+            _status.error(f"데이터 수집 오류: {_e}")
+            continue
+
+        # STEP 1: 서치팀
+        _status.info("🔍 서치팀 분석 중...")
+        try:
+            research_text = ""
+            for _chunk in run_search_team(kw, api_key, rss_data, news_data, web_data, price_data, info_data, kw_type, railway_data):
+                research_text += _chunk
+        except Exception as _e:
+            err = str(_e)
+            if "auth" in err.lower() or "invalid" in err.lower():
+                _status.error("❌ Groq API 키가 올바르지 않습니다.")
+            elif "rate" in err.lower() or "quota" in err.lower():
+                _status.error("⏱️ 사용 한도 초과. 잠시 후 다시 시도해 주세요.")
+            else:
+                _status.error(f"서치팀 오류: {_e}")
+            continue
+
+        # STEP 2: 블로그팀
+        _status.info("✍️ 블로그 작성 중...")
+        try:
+            blog_text = ""
+            for _chunk in run_blog_team(kw, research_text, api_key, kw_type, is_railway):
+                blog_text += _chunk
+        except Exception as _e:
+            err = str(_e)
+            if "auth" in err.lower() or "invalid" in err.lower():
+                _status.error("❌ Groq API 키가 올바르지 않습니다.")
+            elif "rate" in err.lower() or "quota" in err.lower():
+                _status.error("⏱️ 사용 한도 초과. 잠시 후 다시 시도해 주세요.")
+            else:
+                _status.error(f"블로그팀 오류: {_e}")
+            continue
+
+        saved_fname = auto_save_blog(kw, research_text, blog_text)
+        char_count  = len(blog_text.replace(" ", "").replace("\n", ""))
+        _status.success(f"✅ 완료 — {char_count:,}자")
+
+        _results.append({
+            "keyword":       kw,
+            "fname":         saved_fname,
+            "blog_text":     blog_text,
+            "research_text": research_text,
+            "rss_data":      rss_data,
+            "news_data":     news_data,
+            "web_data":      web_data,
+            "char_count":    char_count,
+        })
+
+    if _results:
+        st.markdown("<hr style='border:none; border-top:1px solid #E5E8EB; margin:24px 0 16px 0;'>", unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class='toss-card' style='border-left:4px solid #1BB76E; padding:20px 24px;'>
+            <div class='toss-tag-green'>완성</div>
+            <div class='toss-h2'>🎉 {len(_results)}개 블로그 글 생성 완료</div>
+            <div class='toss-body'>각 키워드별 txt 파일을 다운로드하세요</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        for _r in _results:
+            _kw = _r["keyword"]
+            st.markdown(f"""
+            <div style='font-size:14px; font-weight:800; color:#191F28; margin:16px 0 6px 0;'>
+                📄 {_kw} <span style='font-size:12px; font-weight:400; color:#8B95A1;'>· {_r['char_count']:,}자 · {_r['fname']}</span>
+            </div>
+            """, unsafe_allow_html=True)
+            _col1, _col2 = st.columns(2)
+            with _col1:
+                st.download_button(
+                    "💾 블로그 글 (.txt)",
+                    data=strip_markdown(_r["blog_text"]),
+                    file_name=f"블로그_{_kw}.txt",
+                    mime="text/plain",
+                    key=f"dl_blog_{_kw}",
+                    use_container_width=True,
+                )
+            with _col2:
+                _full_report = (
+                    f"[키워드: {_kw}]\n\n"
+                    f"=== 수집 데이터 ===\n{format_research_data(_r['rss_data'], _r['news_data'], _r['web_data'])}\n\n"
+                    f"=== 서치팀 분석 ===\n{strip_markdown(_r['research_text'])}\n\n"
+                    f"=== 블로그 글 ===\n{strip_markdown(_r['blog_text'])}"
+                )
+                st.download_button(
+                    "📋 전체 리포트 (.txt)",
+                    data=_full_report,
+                    file_name=f"리포트_{_kw}.txt",
+                    mime="text/plain",
+                    key=f"dl_report_{_kw}",
+                    use_container_width=True,
+                )
