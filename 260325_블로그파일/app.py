@@ -3,6 +3,7 @@ from duckduckgo_search import DDGS
 import feedparser
 import streamlit as st
 import json, os, re
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 def clean_text(text: str) -> str:
@@ -1019,7 +1020,7 @@ def run_blog_team(keyword: str, research: str, api_key: str, kw_type: str = "pri
             {"role": "user",   "content": user_msg},
         ],
         stream=True,
-        max_tokens=6000,
+        max_tokens=4000,
         temperature=0.3,
     )
     for chunk in stream:
@@ -1351,7 +1352,7 @@ if run_btn:
 
         _status = st.empty()
 
-        # STEP 0: 데이터 수집
+        # STEP 0: 데이터 수집 (병렬)
         _status.info("📡 데이터 수집 중...")
         kw_type    = detect_keyword_type(kw)
         is_railway = detect_railway_keyword(kw)
@@ -1359,15 +1360,24 @@ if run_btn:
         price_data   = []
         railway_data = []
         try:
-            rss_data  = fetch_rss(kw)
-            news_data = search_news(kw)
-            web_data  = search_web_docs(kw)
+            _extra_fn = search_info_data if kw_type == "info" else search_price_data
+            with ThreadPoolExecutor(max_workers=5) as _pool:
+                _f_rss   = _pool.submit(fetch_rss, kw)
+                _f_news  = _pool.submit(search_news, kw)
+                _f_web   = _pool.submit(search_web_docs, kw)
+                _f_extra = _pool.submit(_extra_fn, kw)
+                _f_rail  = _pool.submit(search_railway_data, kw) if is_railway else None
+
+                rss_data  = _f_rss.result()
+                news_data = _f_news.result()
+                web_data  = _f_web.result()
+                _extra    = _f_extra.result()
+                railway_data = _f_rail.result() if _f_rail else []
+
             if kw_type == "info":
-                info_data = search_info_data(kw)
+                info_data, price_data = _extra, []
             else:
-                price_data = search_price_data(kw)
-            if is_railway:
-                railway_data = search_railway_data(kw)
+                info_data, price_data = [], _extra
         except Exception as _e:
             _status.error(f"데이터 수집 오류: {_e}")
             continue
