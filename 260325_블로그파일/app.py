@@ -142,7 +142,7 @@ def strip_markdown(text: str) -> str:
 
 
 # ── 블로그 저장소 ──────────────────────────────────────────────────────────────
-ARCHIVE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "블로그_저장소")
+ARCHIVE_DIR = r"C:\Users\khmhk\OneDrive\Desktop\00 종합현황\cladefile\260325_개인 블로그"
 os.makedirs(ARCHIVE_DIR, exist_ok=True)
 
 
