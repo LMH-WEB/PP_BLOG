@@ -160,7 +160,7 @@ def auto_save_blog(keyword: str, research: str, blog: str) -> str:
         f"{'='*60}\n\n"
         f"=== 서치팀 분석 ===\n{strip_markdown(research)}\n\n"
         f"{'='*60}\n\n"
-        f"=== 블로그 글 ===\n{blog}"
+        f"=== 블로그 글 ===\n{strip_markdown(blog)}"
     )
     with open(fpath, "w", encoding="utf-8") as f:
         f.write(content)
