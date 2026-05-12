@@ -133,8 +133,43 @@ def get_trending_keywords(api_key: str, status_fn=None) -> list:
     return results[:30]
 
 
+def table_to_text(text: str) -> str:
+    """마크다운 표를 키:값 형식 텍스트로 변환"""
+    lines = text.split('\n')
+    result = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if line.strip().startswith('|') and '|' in line:
+            # 표 블록 수집
+            table_block = []
+            while i < len(lines) and lines[i].strip().startswith('|'):
+                table_block.append(lines[i])
+                i += 1
+            # 구분선 제거 (|---|--- 형태)
+            rows = [l for l in table_block if not re.match(r'^\s*\|[\s\-:|]+\|\s*$', l)]
+            if len(rows) >= 2:
+                headers = [h.strip() for h in rows[0].split('|') if h.strip()]
+                for row in rows[1:]:
+                    cells = [c.strip() for c in row.split('|') if c.strip()]
+                    parts = [
+                        f"{headers[j]}: {cells[j]}"
+                        for j in range(min(len(headers), len(cells)))
+                        if cells[j]
+                    ]
+                    if parts:
+                        result.append(', '.join(parts))
+            elif rows:
+                result.extend(rows)
+        else:
+            result.append(line)
+            i += 1
+    return '\n'.join(result)
+
+
 def strip_markdown(text: str) -> str:
-    """다운로드용 txt에서 마크다운 기호 제거"""
+    """다운로드용 txt에서 마크다운 기호 제거 및 표 변환"""
+    text = table_to_text(text)
     text = re.sub(r'^[-─━=]{2,}\s*$', '', text, flags=re.MULTILINE)
     text = re.sub(r'^#{1,6}\s*', '', text, flags=re.MULTILINE)
     text = re.sub(r'\*{1,3}(.+?)\*{1,3}', r'\1', text)
@@ -147,7 +182,7 @@ ARCHIVE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "블로�
 os.makedirs(ARCHIVE_DIR, exist_ok=True)
 
 
-def auto_save_blog(keyword: str, research: str, blog: str) -> str:
+def auto_save_blog(keyword: str, blog: str) -> str:
     """블로그 글을 저장소에 자동 저장, 저장된 파일명 반환"""
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     safe_kw = re.sub(r'[\\/:*?"<>|]', '_', keyword)[:30]
@@ -157,11 +192,8 @@ def auto_save_blog(keyword: str, research: str, blog: str) -> str:
     content = (
         f"[키워드: {keyword}]\n"
         f"[생성일시: {datetime.now().strftime('%Y-%m-%d %H:%M')}]\n"
-        f"[글자수: {char_count:,}자]\n"
-        f"{'='*60}\n\n"
-        f"=== 서치팀 분석 ===\n{strip_markdown(research)}\n\n"
-        f"{'='*60}\n\n"
-        f"=== 블로그 글 ===\n{strip_markdown(blog)}"
+        f"[글자수: {char_count:,}자]\n\n"
+        f"{strip_markdown(blog)}"
     )
     with open(fpath, "w", encoding="utf-8") as f:
         f.write(content)
@@ -1159,11 +1191,7 @@ if st.session_state.show_archive:
         <hr style='border:none; border-top:1px solid #E5E8EB; margin:12px 0 20px 0;'>
         """, unsafe_allow_html=True)
 
-        # 블로그 글 본문만 추출해서 표시 (=== 블로그 글 === 이후)
-        _blog_part = _content
-        if "=== 블로그 글 ===" in _content:
-            _blog_part = _content.split("=== 블로그 글 ===", 1)[1].strip()
-        st.markdown(_blog_part)
+        st.markdown(_content)
 
     else:
         # ── 카드 목록 ──────────────────────────────────────────────────────────
@@ -1414,7 +1442,7 @@ if run_btn:
                 _status.error(f"블로그팀 오류: {_e}")
             continue
 
-        saved_fname = auto_save_blog(kw, research_text, blog_text)
+        saved_fname = auto_save_blog(kw, blog_text)
         char_count  = len(blog_text.replace(" ", "").replace("\n", ""))
         _status.success(f"✅ 완료 — {char_count:,}자")
 
@@ -1446,28 +1474,11 @@ if run_btn:
                 📄 {_kw} <span style='font-size:12px; font-weight:400; color:#8B95A1;'>· {_r['char_count']:,}자 · {_r['fname']}</span>
             </div>
             """, unsafe_allow_html=True)
-            _col1, _col2 = st.columns(2)
-            with _col1:
-                st.download_button(
-                    "💾 블로그 글 (.txt)",
-                    data=strip_markdown(_r["blog_text"]),
-                    file_name=f"블로그_{_kw}.txt",
-                    mime="text/plain",
-                    key=f"dl_blog_{_kw}",
-                    use_container_width=True,
-                )
-            with _col2:
-                _full_report = (
-                    f"[키워드: {_kw}]\n\n"
-                    f"=== 수집 데이터 ===\n{format_research_data(_r['rss_data'], _r['news_data'], _r['web_data'])}\n\n"
-                    f"=== 서치팀 분석 ===\n{strip_markdown(_r['research_text'])}\n\n"
-                    f"=== 블로그 글 ===\n{strip_markdown(_r['blog_text'])}"
-                )
-                st.download_button(
-                    "📋 전체 리포트 (.txt)",
-                    data=_full_report,
-                    file_name=f"리포트_{_kw}.txt",
-                    mime="text/plain",
-                    key=f"dl_report_{_kw}",
-                    use_container_width=True,
-                )
+            st.download_button(
+                "💾 블로그 글 다운로드 (.txt)",
+                data=strip_markdown(_r["blog_text"]),
+                file_name=f"블로그_{_kw}.txt",
+                mime="text/plain",
+                key=f"dl_blog_{_kw}",
+                use_container_width=True,
+            )
